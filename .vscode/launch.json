@@ -13,13 +13,13 @@
       "justMyCode": true
     },
     {
-      "name": "Python: Browser https",
+      "name": "Python: Browser with url arg",
       "type": "python",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["https://example.org/"]
+      "args": ["data:text/html,<h1>Hello World</h1>"]
     }
   ]
 }

@@ -61,13 +61,22 @@ def request_file(url):
   body = file.read()
   return None, body
 
+def request_data(url):
+  assert url.startswith("text/html"), "data request not of type text/html"
+  media_type, body = url.split(",", 1)
+  return None, body
+
+
 def request(url):
-  scheme, url = url.split("://", 1)
-  assert scheme in ["http", "https", "file"], "Unknown scheme {}".format(scheme)
+  scheme, rest = url.split(":", 1)
+  url = rest[2:] if rest.startswith("//") else rest
+  assert scheme in ["http", "https", "file", "data"], "Unknown scheme {}".format(scheme)
   if scheme in ["http", "https"]:
     return request_http(scheme, url)
   elif scheme == "file":
     return request_file(url)
+  elif scheme == "data":
+    return request_data(url)
     
 
 def show(body):
@@ -79,6 +88,7 @@ def show(body):
       in_angle = False
     elif not in_angle:
       print(c, end="")
+  print("")
 
 
 def load(url):
@@ -86,5 +96,5 @@ def load(url):
   show(body)
 
 if __name__ == "__main__":
-  url = sys.argv[1] if len(sys.argv) > 2 else "file://test.html"
+  url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
   load(url)
