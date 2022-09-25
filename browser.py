@@ -1,5 +1,6 @@
 import socket;
 import ssl;
+import sys;
 
 url = "http://example.org/index.html"
 
@@ -15,9 +16,7 @@ def build_request(host, path):
   request += "\r\n".encode("utf8")
   return request
 
-def request(url):
-  scheme, url = url.split("://", 1)
-  assert scheme in ["http", "https"], "Unknown scheme {}".format(scheme)
+def request_http(scheme, url):
   port = 80 if scheme == "http" else 443
   host, path = url.split("/", 1)
   if ":" in host:
@@ -57,6 +56,20 @@ def request(url):
 
   return headers, body
 
+def request_file(url):
+  file = open(url, "r")
+  body = file.read()
+  return None, body
+
+def request(url):
+  scheme, url = url.split("://", 1)
+  assert scheme in ["http", "https", "file"], "Unknown scheme {}".format(scheme)
+  if scheme in ["http", "https"]:
+    return request_http(scheme, url)
+  elif scheme == "file":
+    return request_file(url)
+    
+
 def show(body):
   in_angle = False
   for c in body:
@@ -73,5 +86,5 @@ def load(url):
   show(body)
 
 if __name__ == "__main__":
-  import sys
-  load(sys.argv[1])
+  url = sys.argv[1] if len(sys.argv) > 2 else "file://test.html"
+  load(url)
