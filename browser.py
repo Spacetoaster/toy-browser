@@ -66,18 +66,32 @@ def request_data(url):
   media_type, body = url.split(",", 1)
   return None, body
 
+def transform_for_viewsource(body):
+  body = body.replace("<", "&lt;")
+  body = body.replace(">", "&gt;")
+  body = "<body>{}</body>".format(body)
+  return body
 
 def request(url):
+  headers, body = None, None
+  view_source = False
+  if url.startswith("view-source:"):
+    view_source = True
+    url = url[len("view-source:"):]
   scheme, rest = url.split(":", 1)
   url = rest[2:] if rest.startswith("//") else rest
   assert scheme in ["http", "https", "file", "data"], "Unknown scheme {}".format(scheme)
   if scheme in ["http", "https"]:
-    return request_http(scheme, url)
+    headers, body = request_http(scheme, url)
   elif scheme == "file":
-    return request_file(url)
+    headers, body = request_file(url)
   elif scheme == "data":
-    return request_data(url)
-    
+    headers, body = request_data(url)
+
+  if (view_source):
+    body = transform_for_viewsource(body)
+  
+  return headers, body
 
 def show(body):
   tag_name = ""
