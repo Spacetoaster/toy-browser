@@ -80,13 +80,20 @@ def request(url):
     
 
 def show(body):
+  tag_name = ""
+  in_body = False
   in_angle = False
   for c in body:
     if c == "<":
       in_angle = True
+      tag_name = ""
     elif c == ">":
       in_angle = False
-    elif not in_angle:
+      if tag_name == "body":
+        in_body = not in_body
+    elif in_angle:
+      tag_name += c
+    elif in_body and not in_angle:
       print(c, end="")
   print("")
 
