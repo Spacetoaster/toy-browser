@@ -3,6 +3,18 @@ import ssl;
 
 url = "http://example.org/index.html"
 
+def build_request(host, path):
+  request_headers = {
+    "HOST": host,
+    "Connection": "close",
+    "User-Agent": "Spacetoaster's Toy Browser",
+  }
+  request = "GET {} HTTP/1.1\r\n".format(path).encode("utf8")
+  for header, value in request_headers.items():
+    request += "{}: {}\r\n".format(header, value).encode("utf8")
+  request += "\r\n".encode("utf8")
+  return request
+
 def request(url):
   scheme, url = url.split("://", 1)
   assert scheme in ["http", "https"], "Unknown scheme {}".format(scheme)
@@ -23,8 +35,8 @@ def request(url):
     s = ctx.wrap_socket(s, server_hostname=host)
 
   s.connect((host, port))
-  s.send("GET {} HTTP/1.0\r\n".format(path).encode("utf8") +
-        "HOST: {}\r\n\r\n".format(host).encode("utf8"))
+  request = build_request(host, path)
+  s.send(request)
 
   response = s.makefile("r", encoding="utf8", newline="\r\n")
   statusline = response.readline()
