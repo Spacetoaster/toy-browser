@@ -1,6 +1,7 @@
 import socket;
 import ssl;
 import sys;
+import gzip;
 
 url = "http://example.org/index.html"
 
@@ -9,6 +10,7 @@ def build_request(host, path):
     "HOST": host,
     "Connection": "close",
     "User-Agent": "Spacetoaster's Toy Browser",
+    "Accept-Encoding": "gzip",
   }
   request = "GET {} HTTP/1.1\r\n".format(path).encode("utf8")
   for header, value in request_headers.items():
@@ -37,21 +39,37 @@ def request_http(scheme, url):
   request = build_request(host, path)
   s.send(request)
 
-  response = s.makefile("r", encoding="utf8", newline="\r\n")
-  statusline = response.readline()
+  response = s.makefile("rb")
+  statusline = response.readline().decode('utf-8')
   version, status, explanation = statusline.split(" ", 2)
   assert status == "200", "{}: {}".format(status, explanation)
   headers = {}
   while True:
-    line = response.readline()
+    line = response.readline().decode('utf-8')
     if line == "\r\n": break
     header, value = line.split(":", 1)
     headers[header.lower()] = value.strip()
 
-  assert "transfer-encoding" not in headers
-  assert "content-encoding" not in headers
+  body = ""
+  if headers["content-encoding"] == "gzip":
+    if "transfer-encoding" in headers and headers["transfer-encoding"] == "chunked":
+      all_chunks = b''
+      while True:
+        line = response.readline().decode('utf-8')
+        if line == "\r\n":
+          continue
+        chunkSize = int(line, 16)
+        if chunkSize == 0:
+          break
+        chunk = response.read(chunkSize)
+        all_chunks += chunk
+      body = gzip.decompress(all_chunks).decode('utf-8')
+    else:
+      body_decompressed = gzip.decompress(response.read())
+      body = body_decompressed.decode('utf-8')
+  else:
+    body = response.read()
 
-  body = response.read()
   s.close()
 
   return headers, body
@@ -104,7 +122,7 @@ def show(body):
       tag_name = ""
     elif c == ">":
       in_angle = False
-      if tag_name == "body":
+      if "body" in tag_name:
         in_body = not in_body
     elif in_angle:
       tag_name += c

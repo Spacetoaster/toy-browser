@@ -19,7 +19,7 @@
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["data:text/html,<h1>Hello World</h1>"]
+      "args": ["https://browser.engineering/"]
     }
   ]
 }
