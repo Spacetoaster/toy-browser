@@ -19,7 +19,7 @@
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["https://browser.engineering/redirect"]
+      "args": ["https://example.org/"]
     }
   ]
 }

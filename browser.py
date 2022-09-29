@@ -2,6 +2,7 @@ import socket
 import ssl
 import sys
 import gzip
+import cache
 
 url = "http://example.org/index.html"
 MAX_REDIRECTS = 10
@@ -44,7 +45,6 @@ def request_http(scheme, url, num_redirects):
     response = s.makefile("rb")
     statusline = response.readline().decode('utf-8')
     version, status, explanation = statusline.split(" ", 2)
-    # assert status == "200", "{}: {}".format(status, explanation)
     headers = {}
     while True:
         line = response.readline().decode('utf-8')
@@ -58,6 +58,7 @@ def request_http(scheme, url, num_redirects):
             raise Exception("Maximum number of redirects reached")
         return handle_redirect(scheme, url, headers["location"], num_redirects + 1)
 
+    assert status == "200", "{}: {}".format(status, explanation)
     body = ""
     if headers["content-encoding"] == "gzip":
         if "transfer-encoding" in headers and headers["transfer-encoding"] == "chunked":
@@ -79,6 +80,7 @@ def request_http(scheme, url, num_redirects):
         body = response.read()
 
     s.close()
+    cache.try_to_cache("{}://{}".format(scheme, url), headers, body)
 
     return headers, body
 
@@ -113,6 +115,11 @@ def request(url, num_redirects = 0):
     if url.startswith("view-source:"):
         view_source = True
         url = url[len("view-source:"):]
+
+    cached_response = cache.get_cached_response(url)
+    if cached_response:
+        return cached_response
+    
     scheme, rest = url.split(":", 1)
     url = rest[2:] if rest.startswith("//") else rest
     assert scheme in ["http", "https", "file",
@@ -159,4 +166,5 @@ def load(url):
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
+    load(url)
     load(url)
