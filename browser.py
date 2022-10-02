@@ -30,6 +30,8 @@ class Browser:
         self.canvas.pack()
         self.scroll = 0
         self.window.bind("<Down>", self.scrolldown)
+        self.window.bind("<Up>", self.scrollup)
+        self.window.bind("<MouseWheel>", self.handle_mousewheel)
     
     def load(self, url):
         headers, body = request(url)
@@ -47,6 +49,17 @@ class Browser:
     def scrolldown(self, e):
         self.scroll += SCROLL_STEP
         self.draw()
+    
+    def scrollup(self, e):
+        self.scroll = max(0, self.scroll - SCROLL_STEP)
+        self.draw()
+    
+    def handle_mousewheel(self, e):
+        # only works on mac due to how tk handles mouse wheel events
+        if e.delta == 1:
+            self.scrollup(e)
+        elif e.delta == -1:
+            self.scrolldown(e)
 
 
 if __name__ == "__main__":
