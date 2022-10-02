@@ -1,4 +1,4 @@
-def show(body):
+def lex(body):
     tag_name = ""
     in_body = False
     in_angle = False
@@ -17,4 +17,4 @@ def show(body):
             output += c
     output = output.replace("&lt;", "<")
     output = output.replace("&gt;", ">")
-    print(output)
+    return output
