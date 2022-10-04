@@ -7,7 +7,7 @@ WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
 
-def layout(text):
+def layout(text, width):
     display_list = []
     cursor_x, cursor_y = HSTEP, VSTEP
     for c in text:
@@ -17,7 +17,7 @@ def layout(text):
         else:
             display_list.append((cursor_x, cursor_y, c))
             cursor_x += HSTEP
-        if cursor_x >= WIDTH - HSTEP:
+        if cursor_x >= width - HSTEP:
             cursor_y += VSTEP
             cursor_x = HSTEP
 
@@ -27,24 +27,31 @@ class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
         self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
-        self.canvas.pack()
+        self.width = WIDTH
+        self.height = HEIGHT
+        self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.scroll = 0
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
+        self.window.bind("<Configure>", self.handle_resize)
     
     def load(self, url):
         headers, body = request(url)
-        text = lex(body)
-        self.display_list = layout(text)
+        self.text = lex(body)
+        self.layout()
         self.draw()
+
+    def layout(self):
+        self.display_list = layout(self.text, self.width)
     
     def draw(self):
         self.canvas.delete("all")
         for x, y, c in self.display_list:
-            if y > self.scroll + HEIGHT: continue
+            if y > self.scroll + self.height: continue
             if y + VSTEP < self.scroll: continue
             self.canvas.create_text(x, y - self.scroll, text=c)
+        
     
     def scrolldown(self, e):
         self.scroll += SCROLL_STEP
@@ -60,6 +67,13 @@ class Browser:
             self.scrollup(e)
         elif e.delta == -1:
             self.scrolldown(e)
+    
+    def handle_resize(self, e):
+        self.width = e.width
+        self.height = e.height
+        self.layout()
+        self.draw()
+
 
 
 if __name__ == "__main__":
