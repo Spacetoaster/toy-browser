@@ -2,24 +2,27 @@ import sys
 from request import request
 from render import lex
 import tkinter
+import tkinter.font
 
 WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
 
-def layout(text, width):
+def layout(text, width, zoom_factor):
     display_list = []
-    cursor_x, cursor_y = HSTEP, VSTEP
+    h_step = int(zoom_factor * HSTEP)
+    v_step = int(zoom_factor * VSTEP)
+    cursor_x, cursor_y = h_step, v_step
     for c in text:
         if c == '\n':
-            cursor_y += VSTEP
-            cursor_x = HSTEP
+            cursor_y += v_step
+            cursor_x = h_step
         else:
             display_list.append((cursor_x, cursor_y, c))
-            cursor_x += HSTEP
-        if cursor_x >= width - HSTEP:
-            cursor_y += VSTEP
-            cursor_x = HSTEP
+            cursor_x += h_step
+        if cursor_x >= width - h_step:
+            cursor_y += v_step
+            cursor_x = h_step
 
     return display_list
 
@@ -31,10 +34,23 @@ class Browser:
         self.height = HEIGHT
         self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.scroll = 0
+        self.zoom_factor = 1
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
         self.window.bind("<Configure>", self.handle_resize)
+        self.window.bind("+", self.zoom_in)
+        self.window.bind("-", self.zoom_out)
+
+    def zoom_in(self, e):
+        self.zoom_factor = self.zoom_factor + 0.25 if self.zoom_factor <= 1.75 else 2
+        self.layout()
+        self.draw()
+    
+    def zoom_out(self, e):
+        self.zoom_factor = self.zoom_factor - 0.25 if self.zoom_factor > 1.25 else 1
+        self.layout()
+        self.draw()
     
     def load(self, url):
         headers, body = request(url)
@@ -43,14 +59,16 @@ class Browser:
         self.draw()
 
     def layout(self):
-        self.display_list = layout(self.text, self.width)
+        self.display_list = layout(self.text, self.width, self.zoom_factor)
     
     def draw(self):
+        font = tkinter.font.Font(size=int(13 * self.zoom_factor))
+        v_step = int(VSTEP * self.zoom_factor)
         self.canvas.delete("all")
         for x, y, c in self.display_list:
             if y > self.scroll + self.height: continue
-            if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x, y - self.scroll, text=c)
+            if y + v_step < self.scroll: continue
+            self.canvas.create_text(x, y - self.scroll, text=c, font=font)
         
     
     def scrolldown(self, e):
