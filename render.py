@@ -1,20 +1,26 @@
+class Text:
+    def __init__(self, text):
+        self.text = text
+
+class Tag:
+    def __init__(self, tag):
+        self.tag = tag
+
 def lex(body):
-    tag_name = ""
-    in_body = False
-    in_angle = False
-    output = ""
+    out = []
+    text = ""
+    in_tag = False
     for c in body:
         if c == "<":
-            in_angle = True
-            tag_name = ""
+            in_tag = True
+            if text: out.append(Text(text))
+            text = ""
         elif c == ">":
-            in_angle = False
-            if "body" in tag_name:
-                in_body = not in_body
-        elif in_angle:
-            tag_name += c
-        elif in_body:
-            output += c
-    output = output.replace("&lt;", "<")
-    output = output.replace("&gt;", ">")
-    return output
+            in_tag = False
+            out.append(Tag(text))
+            text = ""
+        else:
+            text += c
+    if not in_tag and text:
+        out.append(Text(text))
+    return out
