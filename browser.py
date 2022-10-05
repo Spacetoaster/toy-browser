@@ -10,7 +10,7 @@ SCROLL_STEP = 100
 FONTS = {}
 
 class Layout:
-    def __init__(self, tokens):
+    def __init__(self, tokens, width = WIDTH, height = HEIGHT):
         self.display_list = []
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
@@ -18,6 +18,9 @@ class Layout:
         self.style = "roman"
         self.size = 16
         self.line = []
+        self.center = False
+        self.width = width
+        self.height = height
         for tok in tokens:
             self.token(tok)
         self.flush()
@@ -46,14 +49,19 @@ class Layout:
         elif tok.tag == "/p":
             self.flush()
             self.cursor_y += VSTEP
+        elif tok.tag == "h1 class=\"title\"":
+            self.center = True
+        elif tok.tag == "/h1":
+            self.flush()
+            self.center = False
     
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
         for word in tok.text.split():
             w = font.measure(word)
-            if self.cursor_x + w > WIDTH - HSTEP:
+            if self.cursor_x + w > self.width - HSTEP:
                 self.flush()
-            self.line.append((self.cursor_x, word, font))
+            self.line.append((self.cursor_x, word, font, w))
             self.cursor_x += w + font.measure(" ")
     
     def get_font(self, size, weight, slant):
@@ -63,15 +71,19 @@ class Layout:
             FONTS[key] = font
         return FONTS[key]
 
-    
     def flush(self):
         if not self.line: return
-        metrics = [font.metrics() for x, word, font in self.line]
+        metrics = [font.metrics() for x, word, font, _ in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])
         baseline = self.cursor_y + 1.25 * max_ascent
-        for x, word, font in self.line:
+        offset_x = 0
+        if self.center:
+            total_width = sum([l[3] for l in self.line])
+            print(total_width)
+            offset_x = (self.width - 2 * HSTEP - total_width) / 2
+        for x, word, font, _ in self.line:
             y = baseline - font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+            self.display_list.append((x + offset_x, y, word, font))
         self.cursor_x = HSTEP
         self.line = []
         max_descent = max([metric["descent"] for metric in metrics])
@@ -110,7 +122,7 @@ class Browser:
         self.draw()
 
     def layout(self):
-        self.display_list = Layout(self.tokens).display_list
+        self.display_list = Layout(self.tokens, self.width, self.height).display_list
     
     def draw(self):
         v_step = int(VSTEP * self.zoom_factor)
