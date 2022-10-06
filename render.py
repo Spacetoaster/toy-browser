@@ -1,5 +1,7 @@
 class Text:
     def __init__(self, text):
+        text = text.replace("&lt;", "<")
+        text = text.replace("&gt;", ">")
         self.text = text
 
 class Tag:
