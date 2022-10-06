@@ -21,6 +21,7 @@ class Layout:
         self.center = False
         self.width = width
         self.height = height
+        self.superscript = False
         for tok in tokens:
             self.token(tok)
         self.flush()
@@ -54,14 +55,20 @@ class Layout:
         elif tok.tag == "/h1":
             self.flush()
             self.center = False
+        elif tok.tag == "sup":
+            self.superscript = True
+        elif tok.tag == "/sup":
+            self.superscript = False
     
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
+        if self.superscript:
+            font = self.get_font(int(self.size / 2), self.weight, self.style)
         for word in tok.text.split():
             w = font.measure(word)
             if self.cursor_x + w > self.width - HSTEP:
                 self.flush()
-            self.line.append((self.cursor_x, word, font, w))
+            self.line.append((self.cursor_x, word, font, w, self.superscript))
             self.cursor_x += w + font.measure(" ")
     
     def get_font(self, size, weight, slant):
@@ -73,16 +80,18 @@ class Layout:
 
     def flush(self):
         if not self.line: return
-        metrics = [font.metrics() for x, word, font, _ in self.line]
+        metrics = [font.metrics() for _, _, font, _, _ in self.line]
         max_ascent = max([metric["ascent"] for metric in metrics])
         baseline = self.cursor_y + 1.25 * max_ascent
         offset_x = 0
         if self.center:
             total_width = sum([l[3] for l in self.line])
-            print(total_width)
             offset_x = (self.width - 2 * HSTEP - total_width) / 2
-        for x, word, font, _ in self.line:
-            y = baseline - font.metrics("ascent")
+        for x, word, font, _, superscript in self.line:
+            ascent = font.metrics("ascent")
+            if superscript:
+                ascent *= 2
+            y = baseline - ascent
             self.display_list.append((x + offset_x, y, word, font))
         self.cursor_x = HSTEP
         self.line = []
