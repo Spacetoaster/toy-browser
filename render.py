@@ -13,6 +13,7 @@ def lex(body):
     out = []
     text = ""
     in_tag = False
+    in_body = False
     for c in body:
         if c == "<":
             in_tag = True

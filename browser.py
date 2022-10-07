@@ -22,13 +22,15 @@ class Layout:
         self.width = width
         self.height = height
         self.superscript = False
+        self.render = False
         for tok in tokens:
             self.token(tok)
         self.flush()
     
     def token(self, tok):
         if isinstance(tok, Text):
-            self.text(tok)
+            if self.render:
+                self.text(tok)
         elif tok.tag == "i":
             self.style = "italic"
         elif tok.tag == "/":
@@ -59,6 +61,10 @@ class Layout:
             self.superscript = True
         elif tok.tag == "/sup":
             self.superscript = False
+        elif tok.tag == "body":
+            self.render = True
+        elif tok.tag == "/body":
+            self.render = False
     
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
