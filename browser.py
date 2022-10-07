@@ -23,6 +23,7 @@ class Layout:
         self.height = height
         self.superscript = False
         self.render = False
+        self.pre = False
         for tok in tokens:
             self.token(tok)
         self.flush()
@@ -65,17 +66,35 @@ class Layout:
             self.render = True
         elif tok.tag == "/body":
             self.render = False
+        elif tok.tag == "pre":
+            self.pre = True
+        elif tok.tag == "/pre":
+            self.flush()
+            self.pre = False
     
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
         if self.superscript:
             font = self.get_font(int(self.size / 2), self.weight, self.style)
-        for word in tok.text.split():
-            w = font.measure(word)
-            if self.word_fits_line(w):
-                self.line.append((self.cursor_x, word, font, w, self.superscript))
-                self.cursor_x += w + font.measure(" ")
-            else:
+        elif self.pre:
+            font = self.get_font(self.size, self.weight, self.style, "Courier New")
+            for c in tok.text:
+                if c == "\n":
+                    self.flush()
+                w = font.measure(c)
+                self.line.append((self.cursor_x, c, font, w, self.superscript))
+                self.cursor_x += w
+        else:
+            for word in tok.text.split():
+                w = font.measure(word)
+                if self.word_fits_line(w):
+                    self.line.append((self.cursor_x, word, font, w, self.superscript))
+                    self.cursor_x += w + font.measure(" ")
+                else:
+                    self.wrap_word(font, word)
+            
+
+    def wrap_word(self, font, word):
                 word_splits = word.split("\N{soft hyphen}")
                 l = 0
                 r = len(word_splits)
@@ -101,14 +120,18 @@ class Layout:
                         self.flush()
                     l = r
                     r = len(word_splits)
+
     
     def word_fits_line(self, word_width):
         return self.cursor_x + word_width <= self.width - HSTEP
     
-    def get_font(self, size, weight, slant):
-        key = (size, weight, slant)
+    def get_font(self, size, weight, slant, family = None):
+        key = (size, weight, slant, family)
         if key not in FONTS:
-            font = tkinter.font.Font(size=size, weight=weight, slant=slant)
+            if family:
+                font = tkinter.font.Font(size=size, weight=weight, slant=slant, family=family)
+            else:    
+                font = tkinter.font.Font(size=size, weight=weight, slant=slant)
             FONTS[key] = font
         return FONTS[key]
 
