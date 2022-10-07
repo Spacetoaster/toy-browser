@@ -2,6 +2,7 @@ class Text:
     def __init__(self, text):
         text = text.replace("&lt;", "<")
         text = text.replace("&gt;", ">")
+        text = text.replace("&shy;", "\N{soft hyphen}")
         self.text = text
 
 class Tag:

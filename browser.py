@@ -66,10 +66,38 @@ class Layout:
             font = self.get_font(int(self.size / 2), self.weight, self.style)
         for word in tok.text.split():
             w = font.measure(word)
-            if self.cursor_x + w > self.width - HSTEP:
-                self.flush()
-            self.line.append((self.cursor_x, word, font, w, self.superscript))
-            self.cursor_x += w + font.measure(" ")
+            if self.word_fits_line(w):
+                self.line.append((self.cursor_x, word, font, w, self.superscript))
+                self.cursor_x += w + font.measure(" ")
+            else:
+                word_splits = word.split("\N{soft hyphen}")
+                l = 0
+                r = len(word_splits)
+                while l < len(word_splits):
+                    prefix = "".join(word_splits[l:r])
+                    w_prefix = font.measure(prefix)
+                    while not self.word_fits_line(w_prefix) and r > l:
+                        # shorten prefix until it fits in the current line or is empty
+                        r -= 1
+                        prefix = "".join(word_splits[l:r]) + "-"
+                        w_prefix = font.measure(prefix)
+                    if prefix != "-":
+                        self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
+                        self.cursor_x += font.measure(prefix) + font.measure(" ")
+                    elif len(self.line) == 0:
+                        # if all prefixes of the word are longer than the line width, append the smallest prefix
+                        r = l + 1
+                        prefix = "".join(word_splits[l:r])
+                        self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
+                        self.cursor_x += font.measure(prefix) + font.measure(" ")
+                    if r < len(word_splits):
+                        # do not flush after the whole word has been processed
+                        self.flush()
+                    l = r
+                    r = len(word_splits)
+    
+    def word_fits_line(self, word_width):
+        return self.cursor_x + word_width <= self.width - HSTEP
     
     def get_font(self, size, weight, slant):
         key = (size, weight, slant)
@@ -131,7 +159,8 @@ class Browser:
         self.draw()
 
     def layout(self):
-        self.display_list = Layout(self.tokens, self.width, self.height).display_list
+        if self.width > 1 and self.height > 1:
+            self.display_list = Layout(self.tokens, self.width, self.height).display_list
     
     def draw(self):
         v_step = int(VSTEP * self.zoom_factor)
