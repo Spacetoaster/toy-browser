@@ -1,6 +1,6 @@
 import sys
 from request import request
-from render import lex, Text, Tag
+from render import lex, Text, Element
 import tkinter
 import tkinter.font
 
