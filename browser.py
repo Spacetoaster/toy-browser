@@ -1,6 +1,6 @@
 import sys
 from request import request
-from render import lex, Text, Element
+from render import Text, Element, HTMLParser, print_tree
 import tkinter
 import tkinter.font
 
@@ -10,7 +10,7 @@ SCROLL_STEP = 100
 FONTS = {}
 
 class Layout:
-    def __init__(self, tokens, width = WIDTH, height = HEIGHT):
+    def __init__(self, tree, width = WIDTH, height = HEIGHT):
         self.display_list = []
         self.cursor_x = HSTEP
         self.cursor_y = VSTEP
@@ -24,54 +24,62 @@ class Layout:
         self.superscript = False
         self.render = False
         self.pre = False
-        for tok in tokens:
-            self.token(tok)
+        self.recurse(tree)
         self.flush()
     
-    def token(self, tok):
-        if isinstance(tok, Text):
+    def recurse(self, tree):
+        if isinstance(tree, Text):
             if self.render:
-                self.text(tok)
-        elif tok.tag == "i":
+                self.text(tree)
+        else:
+            self.open_tag(tree.tag)
+            for child in tree.children:
+                self.recurse(child)
+            self.close_tag(tree.tag)
+    
+    def open_tag(self, tag):
+        if tag == "i":
             self.style = "italic"
-        elif tok.tag == "/":
-            self.style = "roman"
-        elif tok.tag == "b":
+        elif tag == "b":
             self.weight = "bold"
-        elif tok.tag == "/b":
-            self.weight = "normal"
-        elif tok.tag == "small":
+        elif tag == "small":
             self.size -= 2
-        elif tok.tag == "/small":
-            self.size += 2
-        elif tok.tag == "big":
+        elif tag == "big":
             self.size += 4
-        elif tok.tag == "/big":
-            self.size -= 4
-        elif tok.tag == "br":
+        elif tag == "br":
             self.flush()
-        elif tok.tag == "/p":
+        elif tag == "h1":
+            self.center = True
+        elif tag == "sup":
+            self.superscript = True
+        elif tag == "body":
+            self.render = True
+        elif tag == "pre":
+            self.pre = True
+    
+    def close_tag(self, tag):
+        if tag == "i":
+            self.style = "roman"
+        elif tag == "b":
+            self.weight = "normal"
+        elif tag == "small":
+            self.size += 2
+        elif tag == "big":
+            self.size -= 4
+        elif tag == "p":
             self.flush()
             self.cursor_y += VSTEP
-        elif tok.tag == "h1 class=\"title\"":
-            self.center = True
-        elif tok.tag == "/h1":
+        elif tag == "h1":
             self.flush()
             self.center = False
-        elif tok.tag == "sup":
-            self.superscript = True
-        elif tok.tag == "/sup":
+        elif tag == "sup":
             self.superscript = False
-        elif tok.tag == "body":
-            self.render = True
-        elif tok.tag == "/body":
+        elif tag == "body":
             self.render = False
-        elif tok.tag == "pre":
-            self.pre = True
-        elif tok.tag == "/pre":
+        elif tag == "pre":
             self.flush()
             self.pre = False
-    
+
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
         if self.superscript:
@@ -183,13 +191,13 @@ class Browser:
     
     def load(self, url):
         headers, body = request(url)
-        self.tokens = lex(body)
+        self.nodes = HTMLParser(body).parse()
         self.layout()
         self.draw()
 
     def layout(self):
         if self.width > 1 and self.height > 1:
-            self.display_list = Layout(self.tokens, self.width, self.height).display_list
+            self.display_list = Layout(self.nodes, self.width, self.height).display_list
     
     def draw(self):
         v_step = int(VSTEP * self.zoom_factor)
