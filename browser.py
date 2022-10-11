@@ -1,6 +1,6 @@
 import sys
 from request import request
-from render import Text, Element, HTMLParser, print_tree
+from parser import Text, HTMLParser, print_tree
 import tkinter
 import tkinter.font
 
@@ -25,6 +25,7 @@ class Layout:
         self.render = False
         self.pre = False
         self.recurse(tree)
+        print_tree(tree)
         self.flush()
     
     def recurse(self, tree):

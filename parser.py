@@ -42,17 +42,24 @@ class HTMLParser:
     def parse(self):
         text = ""
         in_tag = False
+        in_comment = False
         for c in self.body:
-            if c == "<":
+            if c == "<" and not in_comment:
                 in_tag = True
                 if text: self.add_text(text)
                 text = ""
-            elif c == ">":
+            elif c == ">" and not in_comment:
                 in_tag = False
                 self.add_tag(text)
                 text = ""
             else:
                 text += c
+                if in_tag and text == "!--":
+                    in_comment = True
+                if in_comment and text.endswith("-->"):
+                    in_comment = False
+                    in_tag = False
+                    text = ""
         if not in_tag and text:
             self.add_text(text)
         return self.finish()
