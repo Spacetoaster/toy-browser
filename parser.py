@@ -43,16 +43,21 @@ class HTMLParser:
         text = ""
         in_tag = False
         in_comment = False
+        in_script = False
         for c in self.body:
             if c == "<" and not in_comment:
                 in_tag = True
-                if text: self.add_text(text)
+                if text and not in_script: self.add_text(text)
                 text = ""
             elif c == ">" and not in_comment:
                 in_tag = False
                 if text == "p" and "p" in [node.tag for node in self.unfinished]:
                     self.add_tag("/p")
-                self.add_tag(text)
+                if not in_script: self.add_tag(text)
+                if text == "script":
+                    in_script = True
+                elif text == "/script":
+                    in_script = False
                 text = ""
             else:
                 text += c
@@ -62,7 +67,7 @@ class HTMLParser:
                     in_comment = False
                     in_tag = False
                     text = ""
-        if not in_tag and text:
+        if not in_tag and text and not in_script:
             self.add_text(text)
         return self.finish()
     
