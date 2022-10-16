@@ -50,6 +50,8 @@ class HTMLParser:
                 text = ""
             elif c == ">" and not in_comment:
                 in_tag = False
+                if text == "p" and "p" in [node.tag for node in self.unfinished]:
+                    self.add_tag("/p")
                 self.add_tag(text)
                 text = ""
             else:
