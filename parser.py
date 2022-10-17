@@ -44,12 +44,15 @@ class HTMLParser:
         in_tag = False
         in_comment = False
         in_script = False
+        in_double_quote_attribute = False
+        in_single_quote_attribute = False
         for c in self.body:
-            if c == "<" and not in_comment:
+            in_attribute = in_single_quote_attribute or in_double_quote_attribute
+            if c == "<" and not in_comment and not in_attribute:
                 in_tag = True
                 if text and not in_script: self.add_text(text)
                 text = ""
-            elif c == ">" and not in_comment:
+            elif c == ">" and not in_comment and not in_attribute:
                 in_tag = False
                 if text == "p" and "p" in [node.tag for node in self.unfinished]:
                     self.add_tag("/p")
@@ -67,6 +70,15 @@ class HTMLParser:
                     in_comment = False
                     in_tag = False
                     text = ""
+                if in_tag:
+                    if not in_double_quote_attribute and text.endswith("=\""):
+                        in_double_quote_attribute = True
+                    elif in_double_quote_attribute and text.endswith("\"") and not text.endswith("\\\""):
+                        in_double_quote_attribute = False
+                    if not in_single_quote_attribute and text.endswith("='"):
+                        in_single_quote_attribute = True
+                    elif in_single_quote_attribute and text.endswith("'") and not text.endswith("\\'"):
+                        in_single_quote_attribute = False
         if not in_tag and text and not in_script:
             self.add_text(text)
         return self.finish()
@@ -124,11 +136,28 @@ class HTMLParser:
         parts = text.split()
         tag = parts[0].lower()
         attributes = {}
+        append_attribute_key = None
+        quote_char = None
         for attrpair in parts[1:]:
-            if "=" in attrpair:
+            if append_attribute_key:
+                value = attrpair
+                if value.endswith(quote_char) and not value.endswith("\\{}".format(quote_char)):
+                    value = value[:len(value) - 1]
+                    attributes[append_attribute_key] += " " + value
+                    quote_char = None
+                    append_attribute_key = None
+                else:
+                    attributes[append_attribute_key] += " " + value
+            elif "=" in attrpair:
                 key, value = attrpair.split("=", 1)
                 if len(value) > 2 and value[0] in ["'", "\""]:
-                    value = value[1:-1]
+                    quote_char = value[0]
+                    value = value[1:]
+                if value.endswith(quote_char) and not value.endswith("\\{}".format(quote_char)):
+                    value = value[:len(value) - 1]
+                    append_attribute_key = None
+                else:
+                    append_attribute_key = key.lower()
                 attributes[key.lower()] = value
             else:
                 attributes[attrpair.lower()] = ""
