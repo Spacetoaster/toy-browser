@@ -162,6 +162,33 @@ class HTMLParser:
             else:
                 attributes[attrpair.lower()] = ""
         return tag, attributes
+
+class ViewSourceParser(HTMLParser):
+    def __init__(self, body):
+        super().__init__(body)
+    
+    def parse(self):
+        text = ""
+        in_tag = False
+        for c in self.body:
+            if c == "<":
+                in_tag = True
+                if text: 
+                    self.add_tag("pre")
+                    self.add_tag("b")
+                    self.add_text(text)
+                    self.add_tag("/b")
+                    self.add_tag("/pre")
+                text = ""
+            elif c == ">":
+                in_tag = False
+                self.add_text("<{}>".format(text))
+                text = ""
+            else:
+                text += c
+        if not in_tag and text:
+            self.add_text(text)
+        return self.finish()
     
 def print_tree(node, indent=0):
     print(" " * indent, node)

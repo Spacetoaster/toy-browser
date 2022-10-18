@@ -1,6 +1,6 @@
 import sys
 from request import request
-from parser import Text, HTMLParser, print_tree
+from parser import Text, HTMLParser, ViewSourceParser, print_tree
 import tkinter
 import tkinter.font
 
@@ -56,6 +56,7 @@ class Layout:
         elif tag == "body":
             self.render = True
         elif tag == "pre":
+            self.flush()
             self.pre = True
     
     def close_tag(self, tag):
@@ -191,8 +192,11 @@ class Browser:
         self.draw()
     
     def load(self, url):
-        headers, body = request(url)
-        self.nodes = HTMLParser(body).parse()
+        headers, body, view_source = request(url)
+        if view_source:
+            self.nodes = ViewSourceParser(body).parse()
+        else:
+            self.nodes = HTMLParser(body).parse()
         self.layout()
         self.draw()
 

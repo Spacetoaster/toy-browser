@@ -114,18 +114,9 @@ def request(url, num_redirects = 0):
     elif scheme == "data":
         headers, body = request_data(url)
 
-    if (view_source):
-        body = transform_for_viewsource(body)
-
-    return headers, body
+    return headers, body, view_source
 
 def request_data(url):
     assert url.startswith("text/html"), "data request not of type text/html"
     media_type, body = url.split(",", 1)
     return None, body
-
-def transform_for_viewsource(body):
-    body = body.replace("<", "&lt;")
-    body = body.replace(">", "&gt;")
-    body = "<body>{}</body>".format(body)
-    return body
