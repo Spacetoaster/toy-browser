@@ -9,29 +9,40 @@ HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
 FONTS = {}
 
-class Layout:
-    def __init__(self, tree, width = WIDTH, height = HEIGHT):
+class InlineLayout:
+    def __init__(self, node, parent, previous):
+        self.node = node
+        self.parent = parent
+        self.previous = previous
+        self.children = []
+
+    def layout(self):
+        self.width = self.parent.width
+        self.x = self.parent.x
+        if self.previous:
+            self.y = self.previous.y + self.previous.height
+        else:
+            self.y = self.parent.y
         self.display_list = []
-        self.cursor_x = HSTEP
-        self.cursor_y = VSTEP
+        self.cursor_x = self.x
+        self.cursor_y = self.y
         self.weight = "normal"
         self.style = "roman"
         self.size = 16
         self.line = []
         self.center = False
-        self.width = width
-        self.height = height
         self.superscript = False
-        self.render = False
         self.pre = False
-        self.recurse(tree)
-        print_tree(tree)
+        self.recurse(self.node)
         self.flush()
+        self.height = self.cursor_y - self.y
+    
+    def paint(self, display_list):
+        display_list.extend(self.display_list)
     
     def recurse(self, tree):
         if isinstance(tree, Text):
-            if self.render:
-                self.text(tree)
+            self.text(tree)
         else:
             self.open_tag(tree.tag)
             for child in tree.children:
@@ -53,8 +64,6 @@ class Layout:
             self.center = True
         elif tag == "sup":
             self.superscript = True
-        elif tag == "body":
-            self.render = True
         elif tag == "pre":
             self.flush()
             self.pre = True
@@ -76,8 +85,6 @@ class Layout:
             self.center = False
         elif tag == "sup":
             self.superscript = False
-        elif tag == "body":
-            self.render = False
         elif tag == "pre":
             self.flush()
             self.pre = False
@@ -105,31 +112,31 @@ class Layout:
             
 
     def wrap_word(self, font, word):
-                word_splits = word.split("\N{soft hyphen}")
-                l = 0
-                r = len(word_splits)
-                while l < len(word_splits):
-                    prefix = "".join(word_splits[l:r])
-                    w_prefix = font.measure(prefix)
-                    while not self.word_fits_line(w_prefix) and r > l:
-                        # shorten prefix until it fits in the current line or is empty
-                        r -= 1
-                        prefix = "".join(word_splits[l:r]) + "-"
-                        w_prefix = font.measure(prefix)
-                    if prefix != "-":
-                        self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
-                        self.cursor_x += font.measure(prefix) + font.measure(" ")
-                    elif len(self.line) == 0:
-                        # if all prefixes of the word are longer than the line width, append the smallest prefix
-                        r = l + 1
-                        prefix = "".join(word_splits[l:r])
-                        self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
-                        self.cursor_x += font.measure(prefix) + font.measure(" ")
-                    if r < len(word_splits):
-                        # do not flush after the whole word has been processed
-                        self.flush()
-                    l = r
-                    r = len(word_splits)
+        word_splits = word.split("\N{soft hyphen}")
+        l = 0
+        r = len(word_splits)
+        while l < len(word_splits):
+            prefix = "".join(word_splits[l:r])
+            w_prefix = font.measure(prefix)
+            while not self.word_fits_line(w_prefix) and r > l:
+                # shorten prefix until it fits in the current line or is empty
+                r -= 1
+                prefix = "".join(word_splits[l:r]) + "-"
+                w_prefix = font.measure(prefix)
+            if prefix != "-":
+                self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
+                self.cursor_x += font.measure(prefix) + font.measure(" ")
+            elif len(self.line) == 0:
+                # if all prefixes of the word are longer than the line width, append the smallest prefix
+                r = l + 1
+                prefix = "".join(word_splits[l:r])
+                self.line.append((self.cursor_x, prefix, font, font.measure(prefix), self.superscript))
+                self.cursor_x += font.measure(prefix) + font.measure(" ")
+            if r < len(word_splits):
+                # do not flush after the whole word has been processed
+                self.flush()
+            l = r
+            r = len(word_splits)
 
     
     def word_fits_line(self, word_width):
@@ -160,10 +167,83 @@ class Layout:
                 ascent *= 2
             y = baseline - ascent
             self.display_list.append((x + offset_x, y, word, font))
-        self.cursor_x = HSTEP
+        self.cursor_x = self.x
         self.line = []
         max_descent = max([metric["descent"] for metric in metrics])
         self.cursor_y = baseline + 1.25 * max_descent
+
+class DocumentLayout:
+    def __init__(self, node):
+        self.node = node
+        self.parent = node
+        self.children = []
+    
+    def layout(self):
+        self.width = WIDTH - 2 * HSTEP
+        self.x = HSTEP
+        self.y = VSTEP
+        child = BlockLayout(self.node, self, None)
+        self.children.append(child)
+        child.layout()
+        self.height = child.height + 2 * VSTEP
+    
+    def paint(self, display_list):
+        self.children[0].paint(display_list)
+
+BLOCK_ELEMENTS = [
+    "html", "body", "article", "section", "nav", "aside",
+    "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
+    "footer", "address", "p", "hr", "pre", "blockquote",
+    "ol", "ul", "menu", "li", "dl", "dt", "dd", "figure",
+    "figcaption", "main", "div", "table", "form", "fieldset",
+    "legend", "details", "summary"
+]
+
+def layout_mode(node):
+    if isinstance(node, Text):
+        return "inline"
+    elif node.children:
+        for child in node.children:
+            if isinstance(child, Text): continue
+            if child.tag in BLOCK_ELEMENTS:
+                return "block"
+        return "inline"
+    else:
+        return "block"
+
+class BlockLayout:
+    def __init__(self, node, parent, previous):
+        self.node = node
+        self.parent = parent
+        self.previous = previous
+        self.children = []
+    
+    def layout(self):
+        self.width = self.parent.width
+        self.x = self.parent.x
+        if self.previous:
+            self.y = self.previous.y + self.previous.height
+        else:
+            self.y = self.parent.y
+        previous = None
+        for child in self.node.children:
+            if layout_mode(child) == "inline":
+                next = InlineLayout(child, self, previous)
+            else:
+                next = BlockLayout(child, self, previous)
+            self.children.append(next)
+            previous = next
+        for child in self.children:
+            child.layout()
+        self.height = sum([child.height for child in self.children])
+    
+    def paint(self, display_list):
+        for child in self.children:
+            child.paint(display_list)
+    
+
+        
+
 
 class Browser:
     def __init__(self):
@@ -183,12 +263,12 @@ class Browser:
 
     def zoom_in(self, e):
         self.zoom_factor = self.zoom_factor + 0.25 if self.zoom_factor <= 1.75 else 2
-        self.layout()
+        # self.layout()
         self.draw()
     
     def zoom_out(self, e):
         self.zoom_factor = self.zoom_factor - 0.25 if self.zoom_factor > 1.25 else 1
-        self.layout()
+        # self.layout()
         self.draw()
     
     def load(self, url):
@@ -197,12 +277,15 @@ class Browser:
             self.nodes = ViewSourceParser(body).parse()
         else:
             self.nodes = HTMLParser(body).parse()
-        self.layout()
+        self.document = DocumentLayout(self.nodes)
+        self.document.layout()
+        self.display_list = []
+        self.document.paint(self.display_list)
         self.draw()
 
-    def layout(self):
-        if self.width > 1 and self.height > 1:
-            self.display_list = Layout(self.nodes, self.width, self.height).display_list
+    # def layout(self):
+        # if self.width > 1 and self.height > 1:
+        #     self.display_list = InlineLayout(self.nodes, self.width, self.height).display_list
     
     def draw(self):
         v_step = int(VSTEP * self.zoom_factor)
@@ -211,7 +294,6 @@ class Browser:
             if y > self.scroll + self.height: continue
             if y + v_step < self.scroll: continue
             self.canvas.create_text(x, y - self.scroll, text=c, font=font, anchor='nw')
-        
     
     def scrolldown(self, e):
         self.scroll += SCROLL_STEP
@@ -229,12 +311,11 @@ class Browser:
             self.scrolldown(e)
     
     def handle_resize(self, e):
-        self.width = e.width
-        self.height = e.height
-        self.layout()
+        if e.width > 1 and e.height > 1:
+            self.width = e.width
+            self.height = e.height
+        # self.layout()
         self.draw()
-
-
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
