@@ -1,6 +1,6 @@
 import sys
 from request import request
-from parser import Text, HTMLParser, ViewSourceParser, print_tree
+from parser import Element, Text, HTMLParser, ViewSourceParser, print_tree
 import tkinter
 import tkinter.font
 
@@ -8,6 +8,38 @@ WIDTH, HEIGHT = 800, 600
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 100
 FONTS = {}
+
+class DrawText:
+    def __init__(self, x1, y1, text, font):
+        self.top = y1
+        self.left = x1
+        self.text = text
+        self.font = font
+        self.bottom = y1 + font.metrics("linespace")
+    
+    def execute(self, scroll, canvas):
+        canvas.create_text(
+            self.left, self.top - scroll,
+            text=self.text,
+            font=self.font,
+            anchor='nw'
+        )
+
+class DrawRect:
+    def __init__(self, x1, y1, x2, y2, color):
+        self.top = y1
+        self.left = x1
+        self.bottom = y2
+        self.right = x2
+        self.color = color
+    
+    def execute(self, scroll, canvas):
+        canvas.create_rectangle(
+            self.left, self.top - scroll,
+            self.right, self.bottom - scroll,
+            width=0,
+            fill=self.color,
+        )
 
 class InlineLayout:
     def __init__(self, node, parent, previous):
@@ -38,7 +70,12 @@ class InlineLayout:
         self.height = self.cursor_y - self.y
     
     def paint(self, display_list):
-        display_list.extend(self.display_list)
+        if isinstance(self.node, Element) and self.node.tag == "pre":
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, "gray")
+            display_list.append(rect)
+        for x, y, word, font in self.display_list:
+            display_list.append(DrawText(x, y, word, font))
     
     def recurse(self, tree):
         if isinstance(tree, Text):
@@ -239,11 +276,7 @@ class BlockLayout:
     
     def paint(self, display_list):
         for child in self.children:
-            child.paint(display_list)
-    
-
-        
-
+            child.paint(display_list)    
 
 class Browser:
     def __init__(self):
@@ -288,15 +321,15 @@ class Browser:
         #     self.display_list = InlineLayout(self.nodes, self.width, self.height).display_list
     
     def draw(self):
-        v_step = int(VSTEP * self.zoom_factor)
         self.canvas.delete("all")
-        for x, y, c, font in self.display_list:
-            if y > self.scroll + self.height: continue
-            if y + v_step < self.scroll: continue
-            self.canvas.create_text(x, y - self.scroll, text=c, font=font, anchor='nw')
+        for cmd in self.display_list:
+            if cmd.top > self.scroll + self.height: continue
+            if cmd.bottom < self.scroll: continue
+            cmd.execute(self.scroll, self.canvas)
     
     def scrolldown(self, e):
-        self.scroll += SCROLL_STEP
+        max_y = self.document.height - self.height
+        self.scroll = min(self.scroll + SCROLL_STEP, max_y)
         self.draw()
     
     def scrollup(self, e):
