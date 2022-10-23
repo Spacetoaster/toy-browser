@@ -269,6 +269,7 @@ class BlockLayout:
             self.y = self.parent.y
         previous = None
         for child in self.node.children:
+            if isinstance(child, Element) and child.tag == "head": continue
             if layout_mode(child) == "inline":
                 next = InlineLayout(child, self, previous)
             else:

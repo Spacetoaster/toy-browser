@@ -174,7 +174,7 @@ class ViewSourceParser(HTMLParser):
         for c in self.body:
             if c == "<":
                 in_tag = True
-                if text: 
+                if text.strip():
                     self.add_tag("pre")
                     self.add_tag("b")
                     self.add_text(text)
