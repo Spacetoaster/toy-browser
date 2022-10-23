@@ -226,8 +226,9 @@ class DocumentLayout:
         self.parent = node
         self.children = []
     
-    def layout(self):
-        self.width = WIDTH - 2 * HSTEP
+    def layout(self, width = WIDTH):
+        self.children = []
+        self.width = width - 2 * HSTEP
         self.x = HSTEP
         self.y = VSTEP
         child = BlockLayout(self.node, self, None)
@@ -303,18 +304,16 @@ class Browser:
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
         self.window.bind("<Configure>", self.handle_resize)
-        self.window.bind("+", self.zoom_in)
-        self.window.bind("-", self.zoom_out)
+        # self.window.bind("+", self.zoom_in)
+        # self.window.bind("-", self.zoom_out)
 
-    def zoom_in(self, e):
-        self.zoom_factor = self.zoom_factor + 0.25 if self.zoom_factor <= 1.75 else 2
-        # self.layout()
-        self.draw()
+    # def zoom_in(self, e):
+    #     self.zoom_factor = self.zoom_factor + 0.25 if self.zoom_factor <= 1.75 else 2
+    #     self.draw()
     
-    def zoom_out(self, e):
-        self.zoom_factor = self.zoom_factor - 0.25 if self.zoom_factor > 1.25 else 1
-        # self.layout()
-        self.draw()
+    # def zoom_out(self, e):
+    #     self.zoom_factor = self.zoom_factor - 0.25 if self.zoom_factor > 1.25 else 1
+    #     self.draw()
     
     def load(self, url):
         headers, body, view_source = request(url)
@@ -327,10 +326,6 @@ class Browser:
         self.display_list = []
         self.document.paint(self.display_list)
         self.draw()
-
-    # def layout(self):
-        # if self.width > 1 and self.height > 1:
-        #     self.display_list = InlineLayout(self.nodes, self.width, self.height).display_list
     
     def draw(self):
         self.canvas.delete("all")
@@ -338,6 +333,20 @@ class Browser:
             if cmd.top > self.scroll + self.height: continue
             if cmd.bottom < self.scroll: continue
             cmd.execute(self.scroll, self.canvas)
+        self.drawScrollbar()
+    
+    def drawScrollbar(self):
+        show_scrollbar = self.document.height > self.height
+        if not show_scrollbar:
+            return
+        scrollbar_height = (self.height / self.document.height) * self.height
+        scrollbar_offset = (self.scroll / self.document.height) * self.height 
+        self.canvas.create_rectangle(
+            self.width - 8, scrollbar_offset,
+            self.width, scrollbar_offset + scrollbar_height,
+            width=0,
+            fill="white",
+        )
     
     def scrolldown(self, e):
         max_y = self.document.height - self.height
@@ -359,7 +368,9 @@ class Browser:
         if e.width > 1 and e.height > 1:
             self.width = e.width
             self.height = e.height
-        # self.layout()
+        self.document.layout(self.width)
+        self.display_list = []
+        self.document.paint(self.display_list)
         self.draw()
 
 if __name__ == "__main__":
