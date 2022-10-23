@@ -72,6 +72,11 @@ class InlineLayout:
         self.height = self.cursor_y - self.y
     
     def paint(self, display_list):
+        # chapter 5 exercise, remove later
+        if isinstance(self.node, Text) and self.node.text == "Table of Contents":
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, "gray")
+            display_list.append(rect)
         if isinstance(self.node, Element) and self.node.tag == "li":
             x1, y1 = self.x, self.y + 10
             x2, y2 = x1 + 5, y1 + 5
@@ -266,6 +271,12 @@ class BlockLayout:
         self.parent = parent
         self.previous = previous
         self.children = []
+        # chapter 5 exercise, maybe remove later
+        if isinstance(self.node, Element) and self.node.tag == "nav":
+            if 'id' in self.node.attributes and self.node.attributes['id'] == 'toc':
+                node = Text("Table of Contents", self.node)
+                if not isinstance(self.node.children[0], Text):
+                    self.node.children.insert(0, node)
     
     def layout(self):
         self.width = self.parent.width
