@@ -70,6 +70,12 @@ class InlineLayout:
         self.height = self.cursor_y - self.y
     
     def paint(self, display_list):
+        # chapter 5 exercise, maybe remove later
+        if isinstance(self.node, Element) and self.node.tag == "nav":
+            if 'class' in self.node.attributes and self.node.attributes['class'] == 'links':
+                x2, y2 = self.x + self.width, self.y + self.height
+                rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                display_list.append(rect)
         if isinstance(self.node, Element) and self.node.tag == "pre":
             x2, y2 = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, "gray")
@@ -175,7 +181,6 @@ class InlineLayout:
             l = r
             r = len(word_splits)
 
-    
     def word_fits_line(self, word_width):
         return self.cursor_x + word_width <= self.width - HSTEP
     
@@ -276,7 +281,7 @@ class BlockLayout:
     
     def paint(self, display_list):
         for child in self.children:
-            child.paint(display_list)    
+            child.paint(display_list)
 
 class Browser:
     def __init__(self):

@@ -25,6 +25,7 @@ class Element:
         if attributes:
             out += " (attributes: " + attributes + ")"
         return out
+
 class HTMLParser:
     SELF_CLOSING_TAGS = [
         "area", "base", "br", "col", "embed", "hr", "img", "input",
