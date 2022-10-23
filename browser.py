@@ -57,6 +57,8 @@ class InlineLayout:
             self.y = self.parent.y
         self.display_list = []
         self.cursor_x = self.x
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            self.cursor_x += 20
         self.cursor_y = self.y
         self.weight = "normal"
         self.style = "roman"
@@ -70,6 +72,10 @@ class InlineLayout:
         self.height = self.cursor_y - self.y
     
     def paint(self, display_list):
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            x1, y1 = self.x, self.y + 10
+            x2, y2 = x1 + 5, y1 + 5
+            display_list.append(DrawRect(x1, y1, x2, y2, "black"))
         # chapter 5 exercise, maybe remove later
         if isinstance(self.node, Element) and self.node.tag == "nav":
             if 'class' in self.node.attributes and self.node.attributes['class'] == 'links':
