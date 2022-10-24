@@ -57,9 +57,9 @@ class HTMLParser:
                 in_tag = False
                 if text == "p" and "p" in [node.tag for node in self.unfinished]:
                     self.add_tag("/p")
-                if not in_script: self.add_tag(text)
                 if text == "script":
                     in_script = True
+                if not in_script: self.add_tag(text)
                 elif text == "/script":
                     in_script = False
                 text = ""
