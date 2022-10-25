@@ -125,6 +125,9 @@ class InlineLayout:
         elif tag == "pre":
             self.flush()
             self.pre = True
+        elif tag == "h6":
+            self.style = "italic"
+            self.weight = "bold"
     
     def close_tag(self, tag):
         if tag == "i":
@@ -146,6 +149,9 @@ class InlineLayout:
         elif tag == "pre":
             self.flush()
             self.pre = False
+        elif tag == "h6":
+            self.style = "roman"
+            self.weight = "normal"
 
     def text(self, tok):
         font = self.get_font(self.size, self.weight, self.style)
@@ -269,6 +275,13 @@ def layout_mode(node):
     else:
         return "block"
 
+def is_run_in_heading_edgecase(inline_layout_sequence_nodes, child):
+    return (len(inline_layout_sequence_nodes) == 1
+        and isinstance(inline_layout_sequence_nodes[0], Element) 
+        and inline_layout_sequence_nodes[0].tag == "h6" 
+        and child.tag == "p" 
+        and layout_mode(child) == "inline")
+
 class BlockLayout:
     def __init__(self, node, parent, previous):
         self.node = node
@@ -293,14 +306,19 @@ class BlockLayout:
         inline_layout_sequence_nodes = []
         for child in self.node.children:
             if isinstance(child, Element) and child.tag == "head": continue
-            if isinstance(child, Text) or child.tag not in BLOCK_ELEMENTS:
+            if isinstance(child, Text) or child.tag not in BLOCK_ELEMENTS or child.tag == "h6":
                 inline_layout_sequence_nodes.append(child)
                 continue
             elif inline_layout_sequence_nodes:
+                run_in_heading_edgecase = is_run_in_heading_edgecase(inline_layout_sequence_nodes, child)
+                if run_in_heading_edgecase:
+                    inline_layout_sequence_nodes.append(child)
                 next = InlineLayout(inline_layout_sequence_nodes, self, previous)
                 self.children.append(next)
                 previous = next
                 inline_layout_sequence_nodes = []
+                if run_in_heading_edgecase:
+                    continue
             if layout_mode(child) == "inline":
                 next = InlineLayout([child], self, previous)
             else:
