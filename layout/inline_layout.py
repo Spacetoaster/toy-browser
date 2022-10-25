@@ -71,6 +71,13 @@ class InlineLayout:
     def paint(self, display_list):
         if len(self.nodes) == 1:
             node = self.nodes[0]
+            bgcolor = "transparent"
+            if isinstance(node, Element):
+                bgcolor = node.style.get("background-color", "transparent")
+            if bgcolor != "transparent":
+                x2, y2 = self.x + self.width, self.y + self.height
+                rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+                display_list.append(rect)
             # chapter 5 exercise, remove later
             if isinstance(node, Text) and node.text == "Table of Contents":
                 x2, y2 = self.x + self.width, self.y + self.height
@@ -86,10 +93,10 @@ class InlineLayout:
                     x2, y2 = self.x + self.width, self.y + self.height
                     rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
                     display_list.append(rect)
-            if isinstance(node, Element) and node.tag == "pre":
-                x2, y2 = self.x + self.width, self.y + self.height
-                rect = DrawRect(self.x, self.y, x2, y2, "gray")
-                display_list.append(rect)
+            # if isinstance(node, Element) and node.tag == "pre":
+            #     x2, y2 = self.x + self.width, self.y + self.height
+            #     rect = DrawRect(self.x, self.y, x2, y2, "gray")
+            #     display_list.append(rect)
         for x, y, word, font in self.display_list:
             display_list.append(DrawText(x, y, word, font))
     
