@@ -1,4 +1,3 @@
-from re import S
 import sys
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element
@@ -40,7 +39,7 @@ class CSSParser:
     
     def body(self):
         pairs = {}
-        while self.i < len(self.s):
+        while self.i < len(self.s) and self.s[self.i] != "}":
             # remove try block when debugging
             try:
                 prop, val = self.pair()
@@ -49,7 +48,7 @@ class CSSParser:
                 self.literal(";")
                 self.whitespace()
             except AssertionError:
-                why = self.ignore_until([";"])
+                why = self.ignore_until([";", "}"])
                 if why == ";":
                     self.literal(";")
                     self.whitespace()
@@ -63,16 +62,89 @@ class CSSParser:
                 return self.s[self.i]
             else:
                 self.i += 1
+    
+    def selector(self):
+        out = TagSelector(self.word().lower())
+        self.whitespace()
+        while self.i < len(self.s) and self.s[self.i] != "{":
+            tag = self.word()
+            descendant = TagSelector(tag.lower())
+            out = DescendantSelector(out, descendant)
+            self.whitespace()
+        return out
+    
+    def parse(self):
+        rules = []
+        while self.i < len(self.s):
+            try:
+                self.whitespace()
+                selector = self.selector()
+                self.literal("{")
+                self.whitespace()
+                body = self.body()
+                self.literal("}")
+                rules.append((selector, body))
+            except AssertionError:
+                why = self.ignore_until(["}"])
+                if why == "}":
+                    self.literal("}")
+                    self.whitespace()
+                else:
+                    break
+        return rules
 
-def style(node):
+def style(node, rules):
         node.style = {}
-        # ...
         for child in node.children:
-            style(child)
+            style(child, rules)
+        for selector, body in rules:
+            if not selector.matches(node): continue
+            for property, value in body.items():
+                node.style[property] = value
         if isinstance(node, Element) and "style" in node.attributes:
             pairs = CSSParser(node.attributes["style"]).body()
             for property, value in pairs.items():
                 node.style[property] = value
+
+class TagSelector:
+    def __init__(self, tag):
+        self.tag = tag
+    
+    def matches(self, node):
+        return isinstance(node, Element) and self.tag == node.tag
+
+class DescendantSelector:
+    def __init__(self, ancestor, descendant):
+        self.ancestor = ancestor
+        self.descendant = descendant
+    
+    def matches(self, node):
+        if not self.descendant.matches(node): return False
+        while node.parent:
+            if self.ancestor.matches(node.parent): return True
+            node = node.parent
+        return False
+
+def tree_to_list(tree, list):
+    list.append(tree)
+    for child in tree.children:
+        tree_to_list(child, list)
+    return list
+
+def resolve_url(url, current):
+    if "://" in url:
+        return url
+    elif url.startswith("/"):
+        scheme, hostpath = current.split("://", 1)
+        host, oldpath = hostpath.split("/", 1)
+        return scheme + "://" + host + url
+    else:
+        dir, _ = current.rsplit("/", 1)
+        while url.startswith("../"):
+            url = url[3:]
+            if dir.count("/") == 2: continue
+            dir, _ = dir.rsplit("/", 1)
+        return dir + "/" + url
 
 class Browser:
     def __init__(self):
@@ -82,6 +154,8 @@ class Browser:
         self.height = HEIGHT
         self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.scroll = 0
+        with open("browser.css") as f:
+            self.default_style_sheet = CSSParser(f.read()).parse()
         self.zoom_factor = 1
         self.window.bind("<Down>", self.scrolldown)
         self.window.bind("<Up>", self.scrollup)
@@ -104,8 +178,20 @@ class Browser:
             self.nodes = ViewSourceParser(body).parse()
         else:
             self.nodes = HTMLParser(body).parse()
-        print_tree(self.nodes)
-        style(self.nodes)
+        # print_tree(self.nodes)
+        rules = self.default_style_sheet.copy()
+        links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
+                if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
+                and node.attributes.get("rel") == "stylesheet"]
+        for link in links:
+            try:
+                header, body, _ = request(resolve_url(link, url))
+                print("downloaded stylesheet {}".format(link))
+            except:
+                print("error downloading stylesheet {}".format(link))
+                continue
+            rules.extend(CSSParser(body).parse())
+        style(self.nodes, rules)
         self.document = DocumentLayout(self.nodes)
         self.document.layout()
         self.display_list = []

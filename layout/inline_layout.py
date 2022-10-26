@@ -93,10 +93,6 @@ class InlineLayout:
                     x2, y2 = self.x + self.width, self.y + self.height
                     rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
                     display_list.append(rect)
-            # if isinstance(node, Element) and node.tag == "pre":
-            #     x2, y2 = self.x + self.width, self.y + self.height
-            #     rect = DrawRect(self.x, self.y, x2, y2, "gray")
-            #     display_list.append(rect)
         for x, y, word, font in self.display_list:
             display_list.append(DrawText(x, y, word, font))
     
