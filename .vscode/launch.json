@@ -19,7 +19,7 @@
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["https://browser.engineering/layout.html"]
+      "args": ["https://browser.engineering/styles.html"]
     }
   ]
 }

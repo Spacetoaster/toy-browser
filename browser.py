@@ -188,7 +188,7 @@ def resolve_url(url, current):
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
-        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT)
+        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT, bg="white")
         self.width = WIDTH
         self.height = HEIGHT
         self.canvas.pack(expand=True, fill=tkinter.BOTH)
@@ -255,7 +255,7 @@ class Browser:
             self.width - 8, scrollbar_offset,
             self.width, scrollbar_offset + scrollbar_height,
             width=0,
-            fill="white",
+            fill="#333",
         )
     
     def scrolldown(self, e):

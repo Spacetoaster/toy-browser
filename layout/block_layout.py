@@ -35,12 +35,6 @@ class BlockLayout:
         self.parent = parent
         self.previous = previous
         self.children = []
-        # chapter 5 exercise, maybe remove later
-        if isinstance(self.node, Element) and self.node.tag == "nav":
-            if 'id' in self.node.attributes and self.node.attributes['id'] == 'toc':
-                node = Text("Table of Contents", self.node)
-                if not isinstance(self.node.children[0], Text):
-                    self.node.children.insert(0, node)
     
     def layout(self):
         self.width = self.parent.width
