@@ -109,7 +109,7 @@ def compute_style(node, property, value):
                 parent_font_size = node.parent.style["font-size"]
             else:
                 parent_font_size = INHERITED_PROPERTIES["font-size"]
-            node_pct = float(value[:1]) / 100
+            node_pct = float(value[:-1]) / 100
             parent_px = float(parent_font_size[:-2])
             return str(node_pct * parent_px) + "px"
         else:
