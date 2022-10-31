@@ -25,3 +25,8 @@ big {
 h1 {
   font-size: 150%;
 }
+
+h6 {
+  font-weight: bold;
+  font-size: 120%;
+}

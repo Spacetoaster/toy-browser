@@ -66,13 +66,17 @@ class InlineLayout:
         else:
             if node.tag == "br":
                 self.flush()
-            # keep special handling for pre for now
+            # keep special handling for pre and sup for now
             if node.tag == "pre":
                 self.pre = True
+            if node.tag == "sup":
+                self.superscript = True
             for child in node.children:
                 self.recurse(child)
             if node.tag == "pre":
                 self.pre = False
+            if node.tag == "sup":
+                self.superscript = False
 
     def text(self, node):
         color = node.style["color"]
@@ -129,7 +133,7 @@ class InlineLayout:
             r = len(word_splits)
 
     def word_fits_line(self, word_width):
-        return self.cursor_x + word_width <= self.width - HSTEP
+        return self.cursor_x + word_width <= self.x + self.width
     
     def get_font(self, size, weight, slant, family = None):
         key = (size, weight, slant, family)
