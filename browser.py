@@ -7,6 +7,7 @@ from layout.document_layout import DocumentLayout
 from constants import SCROLL_STEP, HEIGHT, WIDTH
 
 INHERITED_PROPERTIES = {
+    "font-family": ".AppleSystemUIFont",
     "font-size": "16px",
     "font-style": "normal",
     "font-weight": "normal",
@@ -22,15 +23,18 @@ class CSSParser:
         while self.i < len(self.s) and self.s[self.i].isspace():
             self.i += 1
     
-    def word(self):
+    def word(self, allowWhitespace = False):
         start = self.i
         while self.i < len(self.s):
             if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
                 self.i += 1
             else:
-                break
+                if self.s[self.i].isspace() and allowWhitespace:
+                    self.whitespace()
+                else:
+                    break
         assert self.i > start
-        return self.s[start:self.i]
+        return self.s[start:self.i].strip()
     
     def literal(self, literal):
         assert self.i < len(self.s) and self.s[self.i] == literal
@@ -41,7 +45,7 @@ class CSSParser:
         self.whitespace()
         self.literal(":")
         self.whitespace()
-        val = self.word()
+        val = self.word(allowWhitespace=True)
         return prop.lower(), val
     
     def body(self):

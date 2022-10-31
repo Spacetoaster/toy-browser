@@ -25,9 +25,6 @@ class InlineLayout:
             if isinstance(self.nodes[0], Element) and self.nodes[0].tag == "li":
                 self.cursor_x += 20
         self.cursor_y = self.y
-        self.weight = "normal"
-        self.style = "roman"
-        self.size = 16
         self.line = []
         self.center = False
         self.superscript = False
@@ -82,13 +79,13 @@ class InlineLayout:
         color = node.style["color"]
         weight = node.style["font-weight"]
         style = node.style["font-style"]
+        family = node.style["font-family"]
         if style == "normal": style = "roman"
         size = int(float(node.style["font-size"][:-2]) * 0.75)
-        font = self.get_font(size, weight, style)
+        font = self.get_font(size, weight, style, family)
         if self.superscript:
-            font = self.get_font(int(self.size / 2), self.weight, self.style)
+            font = self.get_font(int(size / 2), weight, style, family)
         if self.pre:
-            font = self.get_font(size, weight, style, "Courier New")
             for c in node.text:
                 if c == "\n":
                     self.flush()
