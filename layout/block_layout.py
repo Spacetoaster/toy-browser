@@ -35,9 +35,25 @@ class BlockLayout:
         self.parent = parent
         self.previous = previous
         self.children = []
+
+    def compute_width(self):
+        css_width = self.node.style.get('width', 'auto')
+        if css_width == 'auto':
+            self.width = self.parent.width
+        elif css_width.endswith('%'):
+            self.width = int(self.parent.width * float(css_width[:-1]) / 100)
+        elif css_width.endswith('px'):
+            self.width = int(css_width[:-2])
+    
+    def compute_height(self):
+        css_height = self.node.style.get('height', 'auto')
+        if css_height == 'auto':
+            self.height = sum([child.height for child in self.children])
+        elif css_height.endswith('px'):
+            self.height = int(css_height[:-2])
     
     def layout(self):
-        self.width = self.parent.width
+        self.compute_width()
         self.x = self.parent.x
         if self.previous:
             self.y = self.previous.y + self.previous.height
@@ -70,7 +86,7 @@ class BlockLayout:
             self.children.append(InlineLayout(inline_layout_sequence_nodes, self, previous))
         for child in self.children:
             child.layout()
-        self.height = sum([child.height for child in self.children])
+        self.compute_height()
     
     def paint(self, display_list):
         for child in self.children:
