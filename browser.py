@@ -74,12 +74,18 @@ class CSSParser:
             else:
                 self.i += 1
     
+    def tag_or_class_selector(self, tag_or_className):
+        if tag_or_className.startswith("."):
+            out = ClassSelector(tag_or_className[1:])
+        else:
+            out = TagSelector(tag_or_className.lower())
+        return out
+
     def selector(self):
-        out = TagSelector(self.word().lower())
+        out = self.tag_or_class_selector(self.word())
         self.whitespace()
         while self.i < len(self.s) and self.s[self.i] != "{":
-            tag = self.word()
-            descendant = TagSelector(tag.lower())
+            descendant = self.tag_or_class_selector(self.word())
             out = DescendantSelector(out, descendant)
             self.whitespace()
         return out
@@ -163,6 +169,16 @@ class DescendantSelector:
             if self.ancestor.matches(node.parent): return True
             node = node.parent
         return False
+
+class ClassSelector:
+    def __init__(self, className):
+        self.className = className
+        self.priority = 10
+    
+    def matches(self, node):
+        if not isinstance(node, Element): return False
+        node_classNames = node.attributes.get("class", "").split()
+        return self.className in node_classNames
 
 def cascade_priority(rule):
     selector, body = rule
