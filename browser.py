@@ -127,6 +127,15 @@ def compute_style(node, property, value):
     else:
         return value
 
+def expand_shorthand_properties(node, property, value):
+    if property == "font":
+        values = value.split()
+        assert len(values) == 4, "Unsupported font property format"
+        node.style["font-style"] = compute_style(node, "font-style", values[0])
+        node.style["font-weight"] = compute_style(node, "font-weight", values[1])
+        node.style["font-size"] = compute_style(node, "font-size", values[2])
+        node.style["font-family"] = compute_style(node, "font-family", values[3])
+
 def style(node, rules):
         node.style = {}
         for property, default_value in INHERITED_PROPERTIES.items():
@@ -140,12 +149,14 @@ def style(node, rules):
                 computed_value = compute_style(node, property, value)
                 if not computed_value: continue
                 node.style[property] = computed_value
+                expand_shorthand_properties(node, property, computed_value)
         if isinstance(node, Element) and "style" in node.attributes:
             pairs = CSSParser(node.attributes["style"]).body()
             for property, value in pairs.items():
                 computed_value = compute_style(node, property, value)
                 if not computed_value: continue
                 node.style[property] = computed_value
+                expand_shorthand_properties(node, property, computed_value)
         for child in node.children:
             style(child, rules)
 
