@@ -1,22 +1,13 @@
 from parser import Text, Element
 from .inline_layout import InlineLayout
 
-BLOCK_ELEMENTS = [
-    "html", "body", "article", "section", "nav", "aside",
-    "h1", "h2", "h3", "h4", "h5", "h6", "hgroup", "header",
-    "footer", "address", "p", "hr", "pre", "blockquote",
-    "ol", "ul", "menu", "li", "dl", "dt", "dd", "figure",
-    "figcaption", "main", "div", "table", "form", "fieldset",
-    "legend", "details", "summary"
-]
-
 def layout_mode(node):
     if isinstance(node, Text):
         return "inline"
     elif node.children:
         for child in node.children:
             if isinstance(child, Text): continue
-            if child.tag in BLOCK_ELEMENTS:
+            if child.style.get("display", "inline") == "block":
                 return "block"
         return "inline"
     else:
@@ -63,7 +54,7 @@ class BlockLayout:
         inline_layout_sequence_nodes = []
         for child in self.node.children:
             if isinstance(child, Element) and child.tag == "head": continue
-            if isinstance(child, Text) or child.tag not in BLOCK_ELEMENTS or child.tag == "h6":
+            if isinstance(child, Text) or child.style.get("display", "inline") == "inline":
                 inline_layout_sequence_nodes.append(child)
                 continue
             elif inline_layout_sequence_nodes:
