@@ -149,11 +149,17 @@ def compute_style(node, property, value):
 def expand_shorthand_properties(node, property, value):
     if property == "font":
         values = value.split()
-        assert len(values) == 4, "Unsupported font property format"
-        node.style["font-style"] = compute_style(node, "font-style", values[0])
-        node.style["font-weight"] = compute_style(node, "font-weight", values[1])
-        node.style["font-size"] = compute_style(node, "font-size", values[2])
-        node.style["font-family"] = compute_style(node, "font-family", values[3])
+        if len(values) == 4:
+            node.style["font-style"] = compute_style(node, "font-style", values[0])
+            node.style["font-weight"] = compute_style(node, "font-weight", values[1])
+            node.style["font-size"] = compute_style(node, "font-size", values[2])
+            node.style["font-family"] = compute_style(node, "font-family", values[3])
+        elif len(values) == 3:
+            node.style["font-style"] = compute_style(node, "font-style", values[0])
+            node.style["font-size"] = compute_style(node, "font-size", values[1])
+            node.style["font-family"] = compute_style(node, "font-family", values[2])
+        else:
+            raise Exception("Unsupported font property format")
 
 def style(node, rules):
         node.style = {}
