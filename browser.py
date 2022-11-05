@@ -1,3 +1,4 @@
+import selectors
 import sys
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element
@@ -84,11 +85,18 @@ class CSSParser:
     def selector(self):
         out = self.tag_or_class_selector(self.word())
         self.whitespace()
+        descendant_selector = None
         while self.i < len(self.s) and self.s[self.i] != "{":
-            descendant = self.tag_or_class_selector(self.word())
-            out = DescendantSelector(out, descendant)
+            if not descendant_selector:
+                descendant_selector = DescendantSelector()
+                descendant_selector.add_selector(out)
+            next = self.tag_or_class_selector(self.word())
+            descendant_selector.add_selector(next)
             self.whitespace()
-        return out
+        if descendant_selector:
+            return descendant_selector
+        else:
+            return out
     
     def parse(self):
         rules = []
@@ -169,17 +177,25 @@ class TagSelector:
         return isinstance(node, Element) and self.tag == node.tag
 
 class DescendantSelector:
-    def __init__(self, ancestor, descendant):
-        self.ancestor = ancestor
-        self.descendant = descendant
-        self.priority = ancestor.priority + descendant.priority
+    def __init__(self):
+        self.selectors = []
+        self.priority = 0
+    
+    def add_selector(self, selector):
+        self.selectors.append(selector)
+        self.priority += selector.priority
     
     def matches(self, node):
-        if not self.descendant.matches(node): return False
-        while node.parent:
-            if self.ancestor.matches(node.parent): return True
+        if len(self.selectors) == 0: return False
+        if not self.selectors[-1].matches(node): return False
+        i = len(self.selectors) - 2
+        node = node.parent
+        while node and i >= 0:
+            selector = self.selectors[i]
+            if selector.matches(node):
+                i -= 1
             node = node.parent
-        return False
+        return i <= 0
 
 class ClassSelector:
     def __init__(self, className):
