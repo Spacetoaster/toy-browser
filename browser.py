@@ -83,20 +83,31 @@ class CSSParser:
         return out
 
     def selector(self):
-        out = self.tag_or_class_selector(self.word())
-        self.whitespace()
-        descendant_selector = None
-        while self.i < len(self.s) and self.s[self.i] != "{":
-            if not descendant_selector:
-                descendant_selector = DescendantSelector()
-                descendant_selector.add_selector(out)
-            next = self.tag_or_class_selector(self.word())
-            descendant_selector.add_selector(next)
+        word = self.word()
+        if "." in word and not word.startswith("."):
+            sequence = word.split(".")
+            tag_selector = TagSelector(sequence[0])
+            class_selectors = []
+            for selector in sequence[1:]:
+                class_selectors.append(ClassSelector(selector))
+            selectorSequence = SelectorSequence(tag_selector, class_selectors)
             self.whitespace()
-        if descendant_selector:
-            return descendant_selector
+            return selectorSequence
         else:
-            return out
+            out = self.tag_or_class_selector(word)
+            self.whitespace()
+            descendant_selector = None
+            while self.i < len(self.s) and self.s[self.i] != "{":
+                if not descendant_selector:
+                    descendant_selector = DescendantSelector()
+                    descendant_selector.add_selector(out)
+                next = self.tag_or_class_selector(self.word())
+                descendant_selector.add_selector(next)
+                self.whitespace()
+            if descendant_selector:
+                return descendant_selector
+            else:
+                return out
     
     def parse(self):
         rules = []
@@ -206,6 +217,21 @@ class ClassSelector:
         if not isinstance(node, Element): return False
         node_classNames = node.attributes.get("class", "").split()
         return self.className in node_classNames
+
+class SelectorSequence:
+    def __init__(self, tag_selector, class_selectors):
+        self.tag_selector = tag_selector
+        self.class_selectors = class_selectors
+        self.priority = tag_selector.priority + sum([s.priority for s in self.class_selectors])
+    
+    def matches(self, node):
+        if not self.tag_selector.matches(node): return False
+        for selector in self.class_selectors:
+            if selector.matches(node):
+                continue
+            else:
+                return False
+        return True
 
 def cascade_priority(rule):
     selector, body = rule
