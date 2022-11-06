@@ -6,6 +6,7 @@ import tkinter
 import tkinter.font
 from layout.document_layout import DocumentLayout
 from constants import SCROLL_STEP, HEIGHT, WIDTH
+from copy import copy
 
 INHERITED_PROPERTIES = {
     "font-family": ".AppleSystemUIFont",
@@ -14,6 +15,20 @@ INHERITED_PROPERTIES = {
     "font-weight": "normal",
     "color": "black",
 }
+
+def extract_and_add_important_rules(rules, selector, body):
+    important = {}
+    for prop, val in body.items():
+        if "!important" in val:
+            important[prop] = "".join(val.split()[:1])
+    if not len(important) > 0: return
+    for prop, _ in important.items():
+        del body[prop]
+    # shallow copy selector, should be fine as long as only
+    # primitive values like priority value gets overwritten
+    selector_copy = copy(selector)
+    selector_copy.priority += 10000
+    rules.append((selector_copy, important))
 
 class CSSParser:
     def __init__(self, s):
@@ -27,7 +42,7 @@ class CSSParser:
     def word(self, allowWhitespace = False):
         start = self.i
         while self.i < len(self.s):
-            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%":
+            if self.s[self.i].isalnum() or self.s[self.i] in "#-.%!":
                 self.i += 1
             else:
                 if self.s[self.i].isspace() and allowWhitespace:
@@ -119,6 +134,7 @@ class CSSParser:
                 self.whitespace()
                 body = self.body()
                 self.literal("}")
+                extract_and_add_important_rules(rules, selector, body)
                 rules.append((selector, body))
             except AssertionError:
                 why = self.ignore_until(["}"])
@@ -127,6 +143,7 @@ class CSSParser:
                     self.whitespace()
                 else:
                     break
+        
         return rules
 
 def compute_style(node, property, value):
