@@ -13,13 +13,6 @@ def layout_mode(node):
     else:
         return "block"
 
-def is_run_in_heading_edgecase(inline_layout_sequence_nodes, child):
-    return (len(inline_layout_sequence_nodes) == 1
-        and isinstance(inline_layout_sequence_nodes[0], Element) 
-        and inline_layout_sequence_nodes[0].tag == "h6" 
-        and child.tag == "p" 
-        and layout_mode(child) == "inline")
-
 class BlockLayout:
     def __init__(self, node, parent, previous):
         self.node = node
@@ -54,27 +47,12 @@ class BlockLayout:
         inline_layout_sequence_nodes = []
         for child in self.node.children:
             if isinstance(child, Element) and child.tag == "head": continue
-            if isinstance(child, Text) or child.style.get("display", "inline") == "inline":
-                inline_layout_sequence_nodes.append(child)
-                continue
-            elif inline_layout_sequence_nodes:
-                run_in_heading_edgecase = is_run_in_heading_edgecase(inline_layout_sequence_nodes, child)
-                if run_in_heading_edgecase:
-                    inline_layout_sequence_nodes.append(child)
-                next = InlineLayout(inline_layout_sequence_nodes, self, previous)
-                self.children.append(next)
-                previous = next
-                inline_layout_sequence_nodes = []
-                if run_in_heading_edgecase:
-                    continue
             if layout_mode(child) == "inline":
-                next = InlineLayout([child], self, previous)
+                next = InlineLayout(child, self, previous)
             else:
                 next = BlockLayout(child, self, previous)
             self.children.append(next)
             previous = next
-        if inline_layout_sequence_nodes:
-            self.children.append(InlineLayout(inline_layout_sequence_nodes, self, previous))
         for child in self.children:
             child.layout()
         self.compute_height()

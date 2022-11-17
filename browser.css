@@ -54,7 +54,7 @@ h2 { display: block; }
 h3 { display: block; }
 h4 { display: block; }
 h5 { display: block; }
-h6 { display: inline; } /* set to inline to enable run-in headings */
+h6 { display: block; }
 hgroup { display: block; }
 header { display: block; }
 footer { display: block; }

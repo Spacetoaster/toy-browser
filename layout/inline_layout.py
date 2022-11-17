@@ -6,8 +6,8 @@ from .drawing import DrawRect, DrawText
 FONTS = {}
 
 class InlineLayout:
-    def __init__(self, nodes, parent, previous):
-        self.nodes = nodes
+    def __init__(self, node, parent, previous):
+        self.node = node
         self.parent = parent
         self.previous = previous
         self.children = []
@@ -21,39 +21,35 @@ class InlineLayout:
             self.y = self.parent.y
         self.display_list = []
         self.cursor_x = self.x
-        if len(self.nodes) == 1:
-            if isinstance(self.nodes[0], Element) and self.nodes[0].tag == "li":
-                self.cursor_x += 20
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            self.cursor_x += 20
         self.cursor_y = self.y
         self.line = []
         self.center = False
         self.superscript = False
         self.pre = False
-        for node in self.nodes:
-            self.recurse(node)
+        self.recurse(self.node)
         self.flush()
         self.height = self.cursor_y - self.y
     
     def paint(self, display_list):
-        if len(self.nodes) == 1:
-            node = self.nodes[0]
-            bgcolor = "transparent"
-            if isinstance(node, Element):
-                bgcolor = node.style.get("background-color", "transparent")
-            if bgcolor != "transparent":
+        bgcolor = "transparent"
+        if isinstance(self.node, Element):
+            bgcolor = self.node.style.get("background-color", "transparent")
+        if bgcolor != "transparent":
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            display_list.append(rect)
+        if isinstance(self.node, Element) and self.node.tag == "li":
+            x1, y1 = self.x, self.y + 10
+            x2, y2 = x1 + 5, y1 + 5
+            display_list.append(DrawRect(x1, y1, x2, y2, "black"))
+        # chapter 5 exercise, maybe remove later
+        if isinstance(self.node, Element) and self.node.tag == "nav":
+            if 'class' in self.node.attributes and self.node.attributes['class'] == 'links':
                 x2, y2 = self.x + self.width, self.y + self.height
-                rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+                rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
                 display_list.append(rect)
-            if isinstance(node, Element) and node.tag == "li":
-                x1, y1 = self.x, self.y + 10
-                x2, y2 = x1 + 5, y1 + 5
-                display_list.append(DrawRect(x1, y1, x2, y2, "black"))
-            # chapter 5 exercise, maybe remove later
-            if isinstance(node, Element) and node.tag == "nav":
-                if 'class' in node.attributes and node.attributes['class'] == 'links':
-                    x2, y2 = self.x + self.width, self.y + self.height
-                    rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
-                    display_list.append(rect)
         for x, y, word, font, color in self.display_list:
             display_list.append(DrawText(x, y, word, font, color))
     
