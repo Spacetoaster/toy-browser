@@ -356,7 +356,7 @@ class Browser:
             self.nodes = ViewSourceParser(body).parse()
         else:
             self.nodes = HTMLParser(body).parse()
-        # print_tree(self.nodes)
+        print_tree(self.nodes)
         rules = self.default_style_sheet.copy()
         links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
                 if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
@@ -369,6 +369,11 @@ class Browser:
                 print("error downloading stylesheet {}".format(link))
                 continue
             rules.extend(CSSParser(body).parse())
+        inline_styles = [node for node in tree_to_list(self.nodes, []) if isinstance(node, Element) and node.tag == "style"]
+        for node in inline_styles:
+            assert len(node.children) == 1, "Inline style with multiple text nodes"
+            rules.extend(CSSParser(node.children[0].text).parse())
+        print(inline_styles)
         style(self.nodes, sorted(rules, key=cascade_priority))
         self.document = DocumentLayout(self.nodes)
         self.document.layout()
