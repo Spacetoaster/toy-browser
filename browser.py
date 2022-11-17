@@ -39,7 +39,7 @@ class CSSParser:
         while self.i < len(self.s) and self.s[self.i].isspace():
             self.i += 1
     
-    def word(self, allowWhitespace = False):
+    def word(self, allowWhitespace = False, additionalChars = []):
         start = self.i
         while self.i < len(self.s):
             if self.s[self.i].isalnum() or self.s[self.i] in "#-.%!":
@@ -47,6 +47,8 @@ class CSSParser:
             else:
                 if self.s[self.i].isspace() and allowWhitespace:
                     self.whitespace()
+                elif additionalChars and self.s[self.i] in additionalChars:
+                    self.i += 1
                 else:
                     break
         assert self.i > start
@@ -98,7 +100,7 @@ class CSSParser:
         return out
 
     def selector(self):
-        word = self.word()
+        word = self.word(additionalChars=":()")
         if "." in word and not word.startswith("."):
             sequence = word.split(".")
             tag_selector = TagSelector(sequence[0])
@@ -108,6 +110,12 @@ class CSSParser:
             selectorSequence = SelectorSequence(tag_selector, class_selectors)
             self.whitespace()
             return selectorSequence
+        elif ":has" in word:
+            selectors = word.split(":has")
+            base_selector = self.tag_or_class_selector(selectors[0])
+            has_selector = self.tag_or_class_selector(selectors[1][1:-1])
+            self.whitespace()
+            return HasSelector(base_selector, has_selector)
         else:
             out = self.tag_or_class_selector(word)
             self.whitespace()
@@ -255,6 +263,41 @@ class SelectorSequence:
             else:
                 return False
         return True
+
+class HasSelector:
+    def __init__(self, base_selector, has_selector):
+        self.base_selector = base_selector
+        self.has_selector = has_selector
+        self.priority = 20
+        self.has_cache = {}
+        self.cache_initialized = False
+    
+    def build_has_cache_recusively(self, selector, node, root):
+        if selector.matches(node):
+            parent = node.parent
+            while True:
+                if parent in self.has_cache or parent == root:
+                    self.has_cache[parent] = True
+                    break
+                self.has_cache[parent] = True
+                parent = parent.parent
+        for child in node.children:
+            self.build_has_cache_recusively(selector, child, root)
+    
+    def init_cache(self, node):
+        html_tag = node
+        while html_tag.tag != "html":
+            html_tag = html_tag.parent
+        assert html_tag.tag == "html", "html element not found"
+        for child in node.children:
+            self.build_has_cache_recusively(self.has_selector, child, node)
+        self.cache_initialized = True
+    
+    def matches(self, node):
+        if not isinstance(node, Element): return False
+        if not self.cache_initialized:
+            self.init_cache(node)
+        return node in self.has_cache and self.base_selector.matches(node)
 
 def cascade_priority(rule):
     selector, body = rule

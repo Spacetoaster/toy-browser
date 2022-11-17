@@ -33,6 +33,14 @@ h6 {
   font-style: italic !important;
 }
 
+.a:has(.b) {
+  color: red;
+}
+
+.a:has(div) {
+  font-weight: bold;
+}
+
 /* block elements */
 html { display: block; }
 body { display: block; }
