@@ -5,10 +5,10 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Python: Current File",
+      "name": "Python: Browser (test page)",
       "type": "python",
       "request": "launch",
-      "program": "${file}",
+      "program": "browser.py",
       "console": "integratedTerminal",
       "justMyCode": true
     },
@@ -16,7 +16,7 @@
       "name": "Python: Browser with url arg",
       "type": "python",
       "request": "launch",
-      "program": "${file}",
+      "program": "browser.py",
       "console": "integratedTerminal",
       "justMyCode": true,
       "args": ["https://browser.engineering/styles.html"]

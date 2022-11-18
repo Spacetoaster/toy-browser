@@ -44,7 +44,6 @@ class BlockLayout:
         else:
             self.y = self.parent.y
         previous = None
-        inline_layout_sequence_nodes = []
         for child in self.node.children:
             if isinstance(child, Element) and child.tag == "head": continue
             if layout_mode(child) == "inline":
