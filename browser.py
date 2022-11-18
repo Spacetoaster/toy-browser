@@ -1,6 +1,6 @@
 import sys
 from request import request
-from parser import HTMLParser, ViewSourceParser, print_tree, Element
+from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 import tkinter
 import tkinter.font
 from layout.document_layout import DocumentLayout
@@ -36,6 +36,7 @@ class Browser:
         self.height = HEIGHT
         self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.scroll = 0
+        self.url = None
         with open("browser.css") as f:
             self.default_style_sheet = CSSParser(f.read()).parse()
         self.zoom_factor = 1
@@ -43,6 +44,7 @@ class Browser:
         self.window.bind("<Up>", self.scrollup)
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
         self.window.bind("<Configure>", self.handle_resize)
+        self.window.bind("<Button-1>", self.click)
         # self.window.bind("+", self.zoom_in)
         # self.window.bind("-", self.zoom_out)
 
@@ -55,6 +57,7 @@ class Browser:
     #     self.draw()
     
     def load(self, url):
+        self.url = url
         headers, body, view_source = request(url)
         if view_source:
             self.nodes = ViewSourceParser(body).parse()
@@ -129,6 +132,22 @@ class Browser:
         self.display_list = []
         self.document.paint(self.display_list)
         self.draw()
+    
+    def click(self, e):
+        x, y = e.x, e.y
+        y += self.scroll
+        objs = [obj for obj in tree_to_list(self.document, [])
+                if obj.x <= x < obj.x + obj.width
+                and obj.y <= y < obj.y + obj.height]
+        if not objs: return
+        elt = objs[-1].node
+        while elt:
+            if isinstance(elt, Text):
+                pass
+            elif elt.tag == "a" and "href" in elt.attributes:
+                url = resolve_url(elt.attributes["href"], self.url)
+                return self.load(url)
+            elt = elt.parent
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
