@@ -33,7 +33,10 @@ class LineLayout:
         
         for word in self.children:
             word.layout()
-        assert len(self.children) > 0, "LineLayout without children"
+        # assert len(self.children) > 0, "LineLayout without children"
+        if len(self.children) == 0:
+            self.height = 0
+            return
         max_ascent = max([word.font.metrics("ascent") for word in self.children])
         baseline = self.y + 1.25 * max_ascent
         for word in self.children:
