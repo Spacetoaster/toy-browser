@@ -1,10 +1,11 @@
 import sys
+from layout.inline_layout import get_font
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 import tkinter
 import tkinter.font
 from layout.document_layout import DocumentLayout
-from constants import SCROLL_STEP, HEIGHT, WIDTH
+from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
 
 def tree_to_list(tree, list):
@@ -28,35 +29,15 @@ def resolve_url(url, current):
             dir, _ = dir.rsplit("/", 1)
         return dir + "/" + url
 
-class Browser:
+class Tab:
     def __init__(self):
-        self.window = tkinter.Tk()
-        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT, bg="white")
-        self.width = WIDTH
-        self.height = HEIGHT
-        self.canvas.pack(expand=True, fill=tkinter.BOTH)
-        self.scroll = 0
-        self.url = None
         with open("browser.css") as f:
             self.default_style_sheet = CSSParser(f.read()).parse()
-        self.zoom_factor = 1
-        self.window.bind("<Down>", self.scrolldown)
-        self.window.bind("<Up>", self.scrollup)
-        self.window.bind("<MouseWheel>", self.handle_mousewheel)
-        self.window.bind("<Configure>", self.handle_resize)
-        self.window.bind("<Button-1>", self.click)
-        # self.window.bind("+", self.zoom_in)
-        # self.window.bind("-", self.zoom_out)
-
-    # def zoom_in(self, e):
-    #     self.zoom_factor = self.zoom_factor + 0.25 if self.zoom_factor <= 1.75 else 2
-    #     self.draw()
-    
-    # def zoom_out(self, e):
-    #     self.zoom_factor = self.zoom_factor - 0.25 if self.zoom_factor > 1.25 else 1
-    #     self.draw()
+        self.scroll = 0
+        self.history = []
     
     def load(self, url):
+        self.history.append(url)
         self.url = url
         headers, body, view_source = request(url)
         if view_source:
@@ -85,56 +66,22 @@ class Browser:
         self.document.layout()
         self.display_list = []
         self.document.paint(self.display_list)
-        self.draw()
+        self.scroll = 0
     
-    def draw(self):
-        self.canvas.delete("all")
-        for cmd in self.display_list:
-            if cmd.top > self.scroll + self.height: continue
-            if cmd.bottom < self.scroll: continue
-            cmd.execute(self.scroll, self.canvas)
-        self.drawScrollbar()
+    def go_back(self):
+        if len(self.history) > 1:
+            self.history.pop()
+            back = self.history.pop()
+            self.load(back)
     
-    def drawScrollbar(self):
-        show_scrollbar = self.document.height > self.height
-        if not show_scrollbar:
-            return
-        scrollbar_height = (self.height / self.document.height) * self.height
-        scrollbar_offset = (self.scroll / self.document.height) * self.height 
-        self.canvas.create_rectangle(
-            self.width - 8, scrollbar_offset,
-            self.width, scrollbar_offset + scrollbar_height,
-            width=0,
-            fill="#333",
-        )
-    
-    def scrolldown(self, e):
-        max_y = self.document.height - self.height
+    def scrolldown(self, height):
+        max_y = self.document.height - (height - CHROME_PX)
         self.scroll = min(self.scroll + SCROLL_STEP, max_y)
-        self.draw()
     
-    def scrollup(self, e):
+    def scrollup(self):
         self.scroll = max(0, self.scroll - SCROLL_STEP)
-        self.draw()
     
-    def handle_mousewheel(self, e):
-        # only works on mac due to how tk handles mouse wheel events
-        if e.delta == 1:
-            self.scrollup(e)
-        elif e.delta == -1:
-            self.scrolldown(e)
-    
-    def handle_resize(self, e):
-        if e.width > 1 and e.height > 1:
-            self.width = e.width
-            self.height = e.height
-        self.document.layout(self.width)
-        self.display_list = []
-        self.document.paint(self.display_list)
-        self.draw()
-    
-    def click(self, e):
-        x, y = e.x, e.y
+    def click(self, x, y):
         y += self.scroll
         objs = [obj for obj in tree_to_list(self.document, [])
                 if obj.x <= x < obj.x + obj.width
@@ -148,6 +95,143 @@ class Browser:
                 url = resolve_url(elt.attributes["href"], self.url)
                 return self.load(url)
             elt = elt.parent
+    
+    def draw(self, canvas, width, height):
+        for cmd in self.display_list:
+            if cmd.top > self.scroll + height - CHROME_PX: continue
+            if cmd.bottom < self.scroll: continue
+            cmd.execute(self.scroll - CHROME_PX, canvas)
+        self.drawScrollbar(canvas, width, height)
+    
+    def drawScrollbar(self, canvas, width, height):
+        max_scroll = self.document.height - (height - CHROME_PX)
+        page_height = height - CHROME_PX
+        show_scrollbar = self.document.height > page_height
+        if not show_scrollbar:
+            return
+        scrollbar_height = (page_height / self.document.height) * page_height
+        scrollbar_offset = (self.scroll / self.document.height) * page_height + CHROME_PX
+        canvas.create_rectangle(
+            width - 8, scrollbar_offset,
+            width, scrollbar_offset + scrollbar_height,
+            width=0,
+            fill="#333",
+        )
+    
+    def resize(self, width):
+        self.document.layout(width)
+        self.display_list = []
+        self.document.paint(self.display_list)
+
+class Browser:
+    def __init__(self):
+        self.window = tkinter.Tk()
+        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT, bg="white")
+        self.width = WIDTH
+        self.height = HEIGHT
+        self.canvas.pack(expand=True, fill=tkinter.BOTH)
+        self.zoom_factor = 1
+        self.tabs = []
+        self.active_tab = None
+        self.focus = None
+        self.address_bar = ""
+        self.window.bind("<Down>", self.handle_down)
+        self.window.bind("<Up>", self.handle_up)
+        self.window.bind("<MouseWheel>", self.handle_mousewheel)
+        self.window.bind("<Configure>", self.handle_resize)
+        self.window.bind("<Button-1>", self.handle_click)
+        self.window.bind("<Key>", self.handle_key)
+        self.window.bind("<Return>", self.handle_enter)
+    
+    def draw(self):
+        self.canvas.delete("all")
+        # draw page content
+        self.tabs[self.active_tab].draw(self.canvas, self.width, self.height)
+        # draw tabs
+        self.canvas.create_rectangle(0, 0, self.width, CHROME_PX, fill="white", outline="black")
+        tabfont = get_font(20, "normal", "roman")
+        for i, tab in enumerate(self.tabs):
+            name = "Tab {}".format(i)
+            x1, x2 = 40 + 80 * i, 120 + 80 * i
+            self.canvas.create_line(x1, 0, x1, 40, fill="black")
+            self.canvas.create_line(x2, 0, x2, 40, fill="black")
+            self.canvas.create_text(x1 + 10, 10, anchor="nw", text=name, font=tabfont, fill="black")
+            if i == self.active_tab:
+                self.canvas.create_line(0, 40, x1, 40, fill="black")
+                self.canvas.create_line(x2, 40, self.width, 40, fill="black")
+            buttonfont = get_font(30, "normal", "roman")
+            self.canvas.create_rectangle(10, 10, 30, 30, outline="black", width=1)
+            self.canvas.create_text(11, 0, anchor="nw", text="+", font=buttonfont, fill="black")
+        # draw address bar
+        self.canvas.create_rectangle(40, 50, self.width - 10, 90, outline="black", width=1)
+        if self.focus == "address bar":
+            self.canvas.create_text(55, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
+            w = buttonfont.measure(self.address_bar)
+            self.canvas.create_line(55 + w, 55, 55 + w, 85, fill="black")
+        else:
+            url = self.tabs[self.active_tab].url
+            self.canvas.create_text(55, 55, anchor="nw", text=url, font=buttonfont, fill="black")
+        # draw back button
+        self.canvas.create_rectangle(10, 50, 35, 90, outline="black", width=1)
+        self.canvas.create_polygon(15, 70, 30, 55, 30, 85, fill='black')
+
+    def handle_down(self, e):
+        self.tabs[self.active_tab].scrolldown(self.height)
+        self.draw()
+    
+    def handle_up(self, e):
+        self.tabs[self.active_tab].scrollup()
+        self.draw()
+    
+    def handle_mousewheel(self, e):
+        # only works on mac due to how tk handles mouse wheel events
+        if e.delta == 1:
+            self.handle_up(e)
+        elif e.delta == -1:
+            self.handle_down(e)
+    
+    def handle_resize(self, e):
+        if e.width > 1 and e.height > 1:
+            self.width = e.width
+            self.height = e.height
+        self.tabs[self.active_tab].resize(self.width)
+        self.draw()
+    
+    def handle_click(self, e):
+        if e.y < CHROME_PX:
+            if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
+                self.active_tab = int((e.x - 40) / 80)
+            elif 10 <= e.x < 30 and 10 <= e.y < 30:
+                self.load("https://browser.engineering/")
+            elif 10 <= e.x < 35 and 40 <= e.y < 90:
+                self.tabs[self.active_tab].go_back()
+            elif 50 <= e.x < self.width - 10 and 40 <= e.y < 90:
+                self.focus = "address bar"
+                self.address_bar = ""
+        else:
+            self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
+        self.draw()
+    
+    def handle_key(self, e):
+        if len(e.char) == 0: return
+        if not (0x20 <= ord(e.char) < 0x7f): return
+
+        if self.focus == "address bar":
+            self.address_bar += e.char
+            self.draw()
+    
+    def handle_enter(self, e):
+        if self.focus == "address bar":
+            self.tabs[self.active_tab].load(self.address_bar)
+            self.focus = None
+            self.draw()
+    
+    def load(self, url):
+        new_tab = Tab()
+        new_tab.load(url)
+        self.active_tab = len(self.tabs)
+        self.tabs.append(new_tab)
+        self.draw()
 
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
