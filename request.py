@@ -101,7 +101,7 @@ def request(url, num_redirects = 0):
 
     cached_response = cache.get_cached_response(url)
     if cached_response:
-        return cached_response
+        return cached_response[0], cached_response[1], view_source
     
     scheme, rest = url.split(":", 1)
     url = rest[2:] if rest.startswith("//") else rest

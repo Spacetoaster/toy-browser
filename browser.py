@@ -142,6 +142,7 @@ class Browser:
         self.window.bind("<Button-1>", self.handle_click)
         self.window.bind("<Key>", self.handle_key)
         self.window.bind("<Return>", self.handle_enter)
+        self.window.bind("<BackSpace>", self.handle_backspace)
     
     def draw(self):
         self.canvas.delete("all")
@@ -224,6 +225,11 @@ class Browser:
         if self.focus == "address bar":
             self.tabs[self.active_tab].load(self.address_bar)
             self.focus = None
+            self.draw()
+    
+    def handle_backspace(self, e):
+        if self.focus == "address bar":
+            self.address_bar = self.address_bar[:-1]
             self.draw()
     
     def load(self, url):
