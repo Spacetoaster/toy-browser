@@ -35,8 +35,9 @@ class Tab:
             self.default_style_sheet = CSSParser(f.read()).parse()
         self.scroll = 0
         self.history = []
+        self.future = []
     
-    def load(self, url):
+    def load(self, url, back_or_forward=False):
         self.history.append(url)
         self.url = url
         headers, body, view_source = request(url)
@@ -67,12 +68,19 @@ class Tab:
         self.display_list = []
         self.document.paint(self.display_list)
         self.scroll = 0
+        if not back_or_forward:
+            self.future = []
     
     def go_back(self):
         if len(self.history) > 1:
-            self.history.pop()
+            forward = self.history.pop()
+            self.future.append(forward)
             back = self.history.pop()
-            self.load(back)
+            self.load(back, back_or_forward=True)
+    
+    def go_forward(self):
+        if len(self.future) > 0:
+            self.load(self.future.pop(0), back_or_forward=True)
     
     def scrolldown(self, height):
         max_y = self.document.height - (height - CHROME_PX)
@@ -168,17 +176,22 @@ class Browser:
             self.canvas.create_rectangle(10, 10, 30, 30, outline="black", width=1)
             self.canvas.create_text(11, 0, anchor="nw", text="+", font=buttonfont, fill="black")
         # draw address bar
-        self.canvas.create_rectangle(40, 50, self.width - 10, 90, outline="black", width=1)
+        self.canvas.create_rectangle(70, 50, self.width - 10, 90, outline="black", width=1)
         if self.focus == "address bar":
-            self.canvas.create_text(55, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
+            self.canvas.create_text(85, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
             w = buttonfont.measure(self.address_bar)
-            self.canvas.create_line(55 + w, 55, 55 + w, 85, fill="black")
+            self.canvas.create_line(85 + w, 55, 85 + w, 85, fill="black")
         else:
             url = self.tabs[self.active_tab].url
-            self.canvas.create_text(55, 55, anchor="nw", text=url, font=buttonfont, fill="black")
+            self.canvas.create_text(85, 55, anchor="nw", text=url, font=buttonfont, fill="black")
         # draw back button
+        back_color = "black" if len(self.tabs[self.active_tab].history) > 1 else "lightgray"
         self.canvas.create_rectangle(10, 50, 35, 90, outline="black", width=1)
-        self.canvas.create_polygon(15, 70, 30, 55, 30, 85, fill='black')
+        self.canvas.create_polygon(15, 70, 30, 55, 30, 85, fill=back_color)
+        # draw forward button
+        forward_color = "black" if len(self.tabs[self.active_tab].future) > 0 else "lightgray"
+        self.canvas.create_rectangle(40, 50, 65, 90, outline="black", width=1)
+        self.canvas.create_polygon(45, 55, 60, 70, 45, 85, fill=forward_color)
 
     def handle_down(self, e):
         self.tabs[self.active_tab].scrolldown(self.height)
@@ -208,9 +221,11 @@ class Browser:
                 self.active_tab = int((e.x - 40) / 80)
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
                 self.load("https://browser.engineering/")
-            elif 10 <= e.x < 35 and 40 <= e.y < 90:
+            elif 10 <= e.x < 35 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_back()
-            elif 50 <= e.x < self.width - 10 and 40 <= e.y < 90:
+            elif 40 <= e.x < 65 and 50 <= e.y < 90:
+                self.tabs[self.active_tab].go_forward()
+            elif 80 <= e.x < self.width - 10 and 40 <= e.y < 90:
                 self.focus = "address bar"
                 self.address_bar = ""
         else:
