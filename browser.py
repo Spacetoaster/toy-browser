@@ -81,7 +81,7 @@ class Tab:
     def scrollup(self):
         self.scroll = max(0, self.scroll - SCROLL_STEP)
     
-    def click(self, x, y):
+    def click(self, x, y, load = True):
         y += self.scroll
         objs = [obj for obj in tree_to_list(self.document, [])
                 if obj.x <= x < obj.x + obj.width
@@ -93,7 +93,10 @@ class Tab:
                 pass
             elif elt.tag == "a" and "href" in elt.attributes:
                 url = resolve_url(elt.attributes["href"], self.url)
-                return self.load(url)
+                if load:
+                    return self.load(url)
+                else:
+                    return url
             elt = elt.parent
     
     def draw(self, canvas, width, height):
@@ -140,6 +143,7 @@ class Browser:
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
         self.window.bind("<Configure>", self.handle_resize)
         self.window.bind("<Button-1>", self.handle_click)
+        self.window.bind("<Button-2>", self.handle_middle_click)
         self.window.bind("<Key>", self.handle_key)
         self.window.bind("<Return>", self.handle_enter)
         self.window.bind("<BackSpace>", self.handle_backspace)
@@ -212,6 +216,15 @@ class Browser:
         else:
             self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
         self.draw()
+    
+    def handle_middle_click(self, e):
+        if e.y >= CHROME_PX:
+            url = self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX, load=False)
+            new_tab = Tab()
+            new_tab.load(url)
+            self.active_tab = len(self.tabs)
+            self.tabs.append(new_tab)
+            self.draw()
     
     def handle_key(self, e):
         if len(e.char) == 0: return
