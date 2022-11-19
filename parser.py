@@ -151,7 +151,7 @@ class HTMLParser:
                     attributes[append_attribute_key] += " " + value
             elif "=" in attrpair:
                 key, value = attrpair.split("=", 1)
-                if len(value) > 2 and value[0] in ["'", "\""]:
+                if len(value) >= 2 and value[0] in ["'", "\""]:
                     quote_char = value[0]
                     value = value[1:]
                 if quote_char and value.endswith(quote_char) and not value.endswith("\\{}".format(quote_char)):
