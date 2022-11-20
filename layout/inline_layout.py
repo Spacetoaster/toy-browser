@@ -71,7 +71,7 @@ class TextLayout:
         else:
             self.x = self.parent.x
         
-        self. height = self.font.metrics("linespace")
+        self.height = self.font.metrics("linespace")
     
     def paint(self, display_list):
         color = self.node.style["color"]

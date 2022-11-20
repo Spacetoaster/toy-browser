@@ -21,6 +21,8 @@ def resolve_url(url, current):
         scheme, hostpath = current.split("://", 1)
         host, oldpath = hostpath.split("/", 1)
         return scheme + "://" + host + url
+    elif url.startswith("#"):
+        return current.split("#")[0] + url
     else:
         dir, _ = current.rsplit("/", 1)
         while url.startswith("../"):
@@ -30,44 +32,51 @@ def resolve_url(url, current):
         return dir + "/" + url
 
 class Tab:
-    def __init__(self):
+    def __init__(self, browser):
         with open("browser.css") as f:
             self.default_style_sheet = CSSParser(f.read()).parse()
         self.scroll = 0
         self.history = []
         self.future = []
+        self.url = ""
+        self.browser = browser
     
     def load(self, url, back_or_forward=False):
         self.history.append(url)
+        url_changed = self.url.split("#")[0] != url.split("#")[0]
         self.url = url
-        headers, body, view_source = request(url)
-        if view_source:
-            self.nodes = ViewSourceParser(body).parse()
+        if url_changed:
+            headers, body, view_source = request(url)
+            if view_source:
+                self.nodes = ViewSourceParser(body).parse()
+            else:
+                self.nodes = HTMLParser(body).parse()
+            # print_tree(self.nodes)
+            rules = self.default_style_sheet.copy()
+            links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
+                    if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
+                    and node.attributes.get("rel") == "stylesheet"]
+            for link in links:
+                try:
+                    header, body, _ = request(resolve_url(link, url))
+                    print("downloaded stylesheet {}".format(link))
+                except:
+                    print("error downloading stylesheet {}".format(link))
+                    continue
+                rules.extend(CSSParser(body).parse())
+            inline_styles = [node for node in tree_to_list(self.nodes, []) if isinstance(node, Element) and node.tag == "style"]
+            for node in inline_styles:
+                assert len(node.children) == 1, "Inline style with multiple text nodes"
+                rules.extend(CSSParser(node.children[0].text).parse())
+            style(self.nodes, sorted(rules, key=cascade_priority))
+            self.document = DocumentLayout(self.nodes)
+            self.document.layout()
+            self.display_list = []
+            self.document.paint(self.display_list)
+            self.scroll = 0
+            self.scroll_to_fragment(url)
         else:
-            self.nodes = HTMLParser(body).parse()
-        # print_tree(self.nodes)
-        rules = self.default_style_sheet.copy()
-        links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
-                if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
-                and node.attributes.get("rel") == "stylesheet"]
-        for link in links:
-            try:
-                header, body, _ = request(resolve_url(link, url))
-                print("downloaded stylesheet {}".format(link))
-            except:
-                print("error downloading stylesheet {}".format(link))
-                continue
-            rules.extend(CSSParser(body).parse())
-        inline_styles = [node for node in tree_to_list(self.nodes, []) if isinstance(node, Element) and node.tag == "style"]
-        for node in inline_styles:
-            assert len(node.children) == 1, "Inline style with multiple text nodes"
-            rules.extend(CSSParser(node.children[0].text).parse())
-        style(self.nodes, sorted(rules, key=cascade_priority))
-        self.document = DocumentLayout(self.nodes)
-        self.document.layout()
-        self.display_list = []
-        self.document.paint(self.display_list)
-        self.scroll = 0
+            self.scroll_to_fragment(url)
         if not back_or_forward:
             self.future = []
     
@@ -82,8 +91,8 @@ class Tab:
         if len(self.future) > 0:
             self.load(self.future.pop(0), back_or_forward=True)
     
-    def scrolldown(self, height):
-        max_y = self.document.height - (height - CHROME_PX)
+    def scrolldown(self):
+        max_y = self.document.height - (self.browser.height - CHROME_PX)
         self.scroll = min(self.scroll + SCROLL_STEP, max_y)
     
     def scrollup(self):
@@ -107,24 +116,35 @@ class Tab:
                     return url
             elt = elt.parent
     
-    def draw(self, canvas, width, height):
+    def scroll_to_fragment(self, url):
+        fragment = url.split("#")[1] if "#" in url else None
+        if not fragment:
+            return
+        elements_with_id = [obj for obj in tree_to_list(self.document, [])
+                   if isinstance(obj.node, Element) and obj.node.attributes.get("id", "") == fragment]
+        if len(elements_with_id) < 1:
+            return
+        element = elements_with_id[-1]
+        max_y = self.document.height - (self.browser.height - CHROME_PX)
+        self.scroll = min(element.y, max_y)
+    
+    def draw(self, canvas):
         for cmd in self.display_list:
-            if cmd.top > self.scroll + height - CHROME_PX: continue
+            if cmd.top > self.scroll + self.browser.height - CHROME_PX: continue
             if cmd.bottom < self.scroll: continue
             cmd.execute(self.scroll - CHROME_PX, canvas)
-        self.drawScrollbar(canvas, width, height)
+        self.drawScrollbar(canvas)
     
-    def drawScrollbar(self, canvas, width, height):
-        max_scroll = self.document.height - (height - CHROME_PX)
-        page_height = height - CHROME_PX
+    def drawScrollbar(self, canvas):
+        page_height = self.browser.height - CHROME_PX
         show_scrollbar = self.document.height > page_height
         if not show_scrollbar:
             return
         scrollbar_height = (page_height / self.document.height) * page_height
         scrollbar_offset = (self.scroll / self.document.height) * page_height + CHROME_PX
         canvas.create_rectangle(
-            width - 8, scrollbar_offset,
-            width, scrollbar_offset + scrollbar_height,
+            self.browser.width - 8, scrollbar_offset,
+            self.browser.width, scrollbar_offset + scrollbar_height,
             width=0,
             fill="#333",
         )
@@ -159,7 +179,7 @@ class Browser:
     def draw(self):
         self.canvas.delete("all")
         # draw page content
-        self.tabs[self.active_tab].draw(self.canvas, self.width, self.height)
+        self.tabs[self.active_tab].draw(self.canvas)
         # draw tabs
         self.canvas.create_rectangle(0, 0, self.width, CHROME_PX, fill="white", outline="black")
         tabfont = get_font(20, "normal", "roman")
@@ -194,7 +214,7 @@ class Browser:
         self.canvas.create_polygon(45, 55, 60, 70, 45, 85, fill=forward_color)
 
     def handle_down(self, e):
-        self.tabs[self.active_tab].scrolldown(self.height)
+        self.tabs[self.active_tab].scrolldown()
         self.draw()
     
     def handle_up(self, e):
@@ -235,7 +255,7 @@ class Browser:
     def handle_middle_click(self, e):
         if e.y >= CHROME_PX:
             url = self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX, load=False)
-            new_tab = Tab()
+            new_tab = Tab(self)
             new_tab.load(url)
             self.active_tab = len(self.tabs)
             self.tabs.append(new_tab)
@@ -261,7 +281,7 @@ class Browser:
             self.draw()
     
     def load(self, url):
-        new_tab = Tab()
+        new_tab = Tab(self)
         new_tab.load(url)
         self.active_tab = len(self.tabs)
         self.tabs.append(new_tab)
