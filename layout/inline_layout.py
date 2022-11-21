@@ -7,6 +7,7 @@ FONTS = {}
 visited_urls = {}
 
 def get_font(size, weight, slant, family = None):
+    if weight != "bold" or weight != "normal": weight = "normal"
     key = (size, weight, slant, family)
     if key not in FONTS:
         if family:
@@ -78,6 +79,8 @@ class TextLayout:
         color = self.node.style["color"]
         if self.node.parent.tag == "a" and self.node.parent.attributes.get("href") in visited_urls:
             color = "#84a"
+        if "var" in color or "inherit" in color:
+            color = "black"
         display_list.append(DrawText(self.x, self.y, self.word, self.font, color))
 
 class InlineLayout:
@@ -104,7 +107,7 @@ class InlineLayout:
         bgcolor = "transparent"
         if isinstance(self.node, Element):
             bgcolor = self.node.style.get("background-color", "transparent")
-        if bgcolor != "transparent":
+        if bgcolor != "transparent" and not "var" in bgcolor:
             x2, y2 = self.x + self.width, self.y + self.height
             rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
             display_list.append(rect)

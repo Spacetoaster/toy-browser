@@ -140,7 +140,7 @@ class HTMLParser:
         append_attribute_key = None
         quote_char = None
         for attrpair in parts[1:]:
-            if append_attribute_key:
+            if append_attribute_key and quote_char:
                 value = attrpair
                 if value.endswith(quote_char) and not value.endswith("\\{}".format(quote_char)):
                     value = value[:len(value) - 1]

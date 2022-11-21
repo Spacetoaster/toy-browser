@@ -176,8 +176,6 @@ def expand_shorthand_properties(node, property, value):
             node.style["font-style"] = compute_style(node, "font-style", values[0])
             node.style["font-size"] = compute_style(node, "font-size", values[1])
             node.style["font-family"] = compute_style(node, "font-family", values[2])
-        else:
-            raise Exception("Unsupported font property format")
 
 def style(node, rules):
         node.style = {}

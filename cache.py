@@ -7,7 +7,10 @@ def try_to_cache(url, headers, body):
         return
     cache_control = headers["cache-control"]
     if cache_control.startswith("max-age"):
-        max_age = int(cache_control[len("max-age="):])
+        max_age_value = cache_control[len("max-age="):]
+        if not max_age_value.isnumeric():
+            return
+        max_age = int(max_age_value)
         age = 0
         if "age" in headers:
             age = int(headers["age"])

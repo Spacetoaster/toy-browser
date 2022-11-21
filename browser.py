@@ -44,8 +44,8 @@ class Tab:
                 rules.extend(CSSParser(body).parse())
             inline_styles = [node for node in tree_to_list(self.nodes, []) if isinstance(node, Element) and node.tag == "style"]
             for node in inline_styles:
-                assert len(node.children) == 1, "Inline style with multiple text nodes"
-                rules.extend(CSSParser(node.children[0].text).parse())
+                if node.children:
+                    rules.extend(CSSParser(node.children[0].text).parse())
             style(self.nodes, sorted(rules, key=cascade_priority))
             self.document = DocumentLayout(self.nodes)
             self.document.layout()
