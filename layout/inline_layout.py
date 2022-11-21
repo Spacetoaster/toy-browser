@@ -1,9 +1,10 @@
-from constants import VSTEP, HSTEP
 from parser import Element, Text
 import tkinter.font
 from .drawing import DrawRect, DrawText
 
 FONTS = {}
+
+visited_urls = {}
 
 def get_font(size, weight, slant, family = None):
     key = (size, weight, slant, family)
@@ -75,6 +76,8 @@ class TextLayout:
     
     def paint(self, display_list):
         color = self.node.style["color"]
+        if self.node.parent.tag == "a" and self.node.parent.attributes.get("href") in visited_urls:
+            color = "#84a"
         display_list.append(DrawText(self.x, self.y, self.word, self.font, color))
 
 class InlineLayout:

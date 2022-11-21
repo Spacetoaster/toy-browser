@@ -1,5 +1,6 @@
 import sys
-from layout.inline_layout import get_font
+from helpers import resolve_url, tree_to_list
+from layout.inline_layout import get_font, visited_urls
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 import tkinter
@@ -7,29 +8,6 @@ import tkinter.font
 from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
-
-def tree_to_list(tree, list):
-    list.append(tree)
-    for child in tree.children:
-        tree_to_list(child, list)
-    return list
-
-def resolve_url(url, current):
-    if "://" in url:
-        return url
-    elif url.startswith("/"):
-        scheme, hostpath = current.split("://", 1)
-        host, oldpath = hostpath.split("/", 1)
-        return scheme + "://" + host + url
-    elif url.startswith("#"):
-        return current.split("#")[0] + url
-    else:
-        dir, _ = current.rsplit("/", 1)
-        while url.startswith("../"):
-            url = url[3:]
-            if dir.count("/") == 2: continue
-            dir, _ = dir.rsplit("/", 1)
-        return dir + "/" + url
 
 class Tab:
     def __init__(self, browser):
@@ -43,7 +21,7 @@ class Tab:
     
     def load(self, url, back_or_forward=False):
         self.history.append(url)
-        url_changed = self.url.split("#")[0] != url.split("#")[0]
+        url_changed = self.url.split("#")[0] != url.split("#")[0] if self.url else True
         self.url = url
         if url_changed:
             headers, body, view_source = request(url)
@@ -109,7 +87,9 @@ class Tab:
             if isinstance(elt, Text):
                 pass
             elif elt.tag == "a" and "href" in elt.attributes:
-                url = resolve_url(elt.attributes["href"], self.url)
+                unresolved_url = elt.attributes["href"]
+                if unresolved_url not in visited_urls: visited_urls[unresolved_url] = True
+                url = resolve_url(unresolved_url, self.url)
                 if load:
                     return self.load(url)
                 else:
@@ -255,6 +235,8 @@ class Browser:
     def handle_middle_click(self, e):
         if e.y >= CHROME_PX:
             url = self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX, load=False)
+            if not url:
+                return
             new_tab = Tab(self)
             new_tab.load(url)
             self.active_tab = len(self.tabs)
