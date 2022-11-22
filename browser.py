@@ -9,6 +9,15 @@ from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
 
+def handle_special_pages(url, browser):
+    if url == "about:bookmarks":
+        body = "<html><body><h1>Bookmarks</h1>"
+        for bookmark in browser.bookmarks:
+            body += "<a href=\"{}\"><li>{}</li>".format(bookmark, bookmark)
+        body += "</body></html>"
+        return None, body, False
+    return None, None, False
+
 class Tab:
     def __init__(self, browser):
         with open("browser.css") as f:
@@ -24,7 +33,9 @@ class Tab:
         url_changed = self.url.split("#")[0] != url.split("#")[0] if self.url else True
         self.url = url
         if url_changed:
-            headers, body, view_source = request(url)
+            headers, body, view_source = handle_special_pages(url, self.browser)
+            if not body:
+                headers, body, view_source = request(url)
             if view_source:
                 self.nodes = ViewSourceParser(body).parse()
             else:
@@ -146,6 +157,7 @@ class Browser:
         self.active_tab = None
         self.focus = None
         self.address_bar = ""
+        self.bookmarks = set()
         self.window.bind("<Down>", self.handle_down)
         self.window.bind("<Up>", self.handle_up)
         self.window.bind("<MouseWheel>", self.handle_mousewheel)
@@ -176,7 +188,7 @@ class Browser:
             self.canvas.create_rectangle(10, 10, 30, 30, outline="black", width=1)
             self.canvas.create_text(11, 0, anchor="nw", text="+", font=buttonfont, fill="black")
         # draw address bar
-        self.canvas.create_rectangle(70, 50, self.width - 10, 90, outline="black", width=1)
+        self.canvas.create_rectangle(70, 50, self.width - 60, 90, outline="black", width=1)
         if self.focus == "address bar":
             self.canvas.create_text(85, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
             w = buttonfont.measure(self.address_bar)
@@ -192,6 +204,12 @@ class Browser:
         forward_color = "black" if len(self.tabs[self.active_tab].future) > 0 else "lightgray"
         self.canvas.create_rectangle(40, 50, 65, 90, outline="black", width=1)
         self.canvas.create_polygon(45, 55, 60, 70, 45, 85, fill=forward_color)
+        # bookmark button
+        bookmarkfont = get_font(12, "normal", "roman")
+        bookmark_bgcolor = "yellow" if self.tabs[self.active_tab].url in self.bookmarks else None
+        self.canvas.create_rectangle(self.width - 50, 50, self.width - 10, 90, outline="black", width=1, fill=bookmark_bgcolor)
+        self.canvas.create_text(self.width - 44, 55, anchor="nw", text="book", font=bookmarkfont, fill="black")
+        self.canvas.create_text(self.width - 44, 70, anchor="nw", text="mark", font=bookmarkfont, fill="black")
 
     def handle_down(self, e):
         self.tabs[self.active_tab].scrolldown()
@@ -225,9 +243,11 @@ class Browser:
                 self.tabs[self.active_tab].go_back()
             elif 40 <= e.x < 65 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_forward()
-            elif 80 <= e.x < self.width - 10 and 40 <= e.y < 90:
+            elif 80 <= e.x < self.width - 60 and 40 <= e.y < 90:
                 self.focus = "address bar"
                 self.address_bar = ""
+            elif self.width - 50 <= e.x < self.width - 10 and 50 <= e.y < 90:
+                self.bookmark()
         else:
             self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
         self.draw()
@@ -261,6 +281,14 @@ class Browser:
         if self.focus == "address bar":
             self.address_bar = self.address_bar[:-1]
             self.draw()
+    
+    def bookmark(self):
+        url = self.tabs[self.active_tab].url
+        if url in self.bookmarks:
+            self.bookmarks.remove(url)
+        else:
+            self.bookmarks.add(url)
+        self.draw()
     
     def load(self, url):
         new_tab = Tab(self)
