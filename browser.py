@@ -157,6 +157,7 @@ class Browser:
         self.active_tab = None
         self.focus = None
         self.address_bar = ""
+        self.text_cursor_position = 0
         self.bookmarks = set()
         self.window.bind("<Down>", self.handle_down)
         self.window.bind("<Up>", self.handle_up)
@@ -167,6 +168,8 @@ class Browser:
         self.window.bind("<Key>", self.handle_key)
         self.window.bind("<Return>", self.handle_enter)
         self.window.bind("<BackSpace>", self.handle_backspace)
+        self.window.bind("<Left>", self.handle_left)
+        self.window.bind("<Right>", self.handle_right)
     
     def draw(self):
         self.canvas.delete("all")
@@ -191,7 +194,7 @@ class Browser:
         self.canvas.create_rectangle(70, 50, self.width - 60, 90, outline="black", width=1)
         if self.focus == "address bar":
             self.canvas.create_text(85, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
-            w = buttonfont.measure(self.address_bar)
+            w = buttonfont.measure(self.address_bar[:self.text_cursor_position])
             self.canvas.create_line(85 + w, 55, 85 + w, 85, fill="black")
         else:
             url = self.tabs[self.active_tab].url
@@ -218,6 +221,16 @@ class Browser:
     def handle_up(self, e):
         self.tabs[self.active_tab].scrollup()
         self.draw()
+    
+    def handle_left(self, e):
+        if self.focus == "address bar":
+            self.text_cursor_position = max(0, self.text_cursor_position - 1)
+            self.draw()
+    
+    def handle_right(self, e):
+        if self.focus == "address bar":
+            self.text_cursor_position = min(len(self.address_bar), self.text_cursor_position + 1)
+            self.draw()
     
     def handle_mousewheel(self, e):
         # only works on mac due to how tk handles mouse wheel events
@@ -268,7 +281,10 @@ class Browser:
         if not (0x20 <= ord(e.char) < 0x7f): return
 
         if self.focus == "address bar":
-            self.address_bar += e.char
+            prefix = self.address_bar[:self.text_cursor_position]
+            suffix = self.address_bar[self.text_cursor_position:]
+            self.address_bar = prefix + e.char + suffix
+            self.text_cursor_position += 1
             self.draw()
     
     def handle_enter(self, e):
@@ -279,7 +295,10 @@ class Browser:
     
     def handle_backspace(self, e):
         if self.focus == "address bar":
-            self.address_bar = self.address_bar[:-1]
+            prefix = self.address_bar[:self.text_cursor_position]
+            suffix = self.address_bar[self.text_cursor_position:]
+            self.address_bar = prefix[:-1] + suffix
+            self.text_cursor_position = max(self.text_cursor_position - 1, 0)
             self.draw()
     
     def bookmark(self):
@@ -295,6 +314,8 @@ class Browser:
         new_tab.load(url)
         self.active_tab = len(self.tabs)
         self.tabs.append(new_tab)
+        self.address_bar = ""
+        self.focus = None
         self.draw()
 
 if __name__ == "__main__":
