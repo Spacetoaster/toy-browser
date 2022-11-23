@@ -1,6 +1,7 @@
 from parser import Element, Text
 import tkinter.font
 from .drawing import DrawRect, DrawText
+from constants import INPUT_WIDTH_PX
 
 FONTS = {}
 
@@ -16,6 +17,46 @@ def get_font(size, weight, slant, family = None):
             font = tkinter.font.Font(size=size, weight=weight, slant=slant)
         FONTS[key] = font
     return FONTS[key]
+
+class InputLayout:
+    def __init__(self, node, parent, previous):
+        self.node = node
+        self.children = []
+        self.parent = parent
+        self.previous = previous
+    
+    def layout(self):
+        weight = self.node.style["font-weight"] 
+        style = self.node.style["font-style"]
+        family = self.node.style["font-family"]
+        if style == "normal": style = "roman"
+        size = int(float(self.node.style["font-size"][:-2]) * 0.75)
+        self.font = get_font(size, weight, style, family)
+        self.width = INPUT_WIDTH_PX
+
+        if self.previous:
+            space = self.previous.font.measure(" ")
+            self.x = self.previous.x + space + self.previous.width
+        else:
+            self.x = self.parent.x
+        
+        self.height = self.font.metrics("linespace")
+    
+    def paint(self, display_list):
+        bgcolor = self.node.style.get("background-color", "transparent")
+
+        if bgcolor != "transparent":
+            x2, y2 = self.x + self.width, self.y + self.height
+            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+            display_list.append(rect)
+        
+        if self.node.tag == "input":
+            text = self.node.attributes.get("value", "")
+        elif self.node.tag == "button":
+            text = self.node.children[0].text
+        
+        color = self.node.style["color"]
+        display_list.append(DrawText(self.x, self.y, text, self.font, color))
 
 class LineLayout:
     def __init__(self, node, parent, previous):
@@ -59,7 +100,7 @@ class TextLayout:
         self.previous = previous
     
     def layout(self):
-        weight = self.node.style["font-weight"] 
+        weight = self.node.style["font-weight"]
         style = self.node.style["font-style"]
         family = self.node.style["font-family"]
         if style == "normal": style = "roman"
@@ -107,15 +148,12 @@ class InlineLayout:
         bgcolor = "transparent"
         if isinstance(self.node, Element):
             bgcolor = self.node.style.get("background-color", "transparent")
-        if bgcolor != "transparent" and not "var" in bgcolor:
-            x2, y2 = self.x + self.width, self.y + self.height
-            rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
-            display_list.append(rect)
-        # chapter 5 exercise, maybe remove later
-        if isinstance(self.node, Element) and self.node.tag == "nav":
-            if 'class' in self.node.attributes and self.node.attributes['class'] == 'links':
+        is_atomic = not isinstance(self.node, Text) and (self.node.tag == "input" or self.node.tag == "button")
+
+        if not is_atomic:
+            if bgcolor != "transparent" and not "var" in bgcolor:
                 x2, y2 = self.x + self.width, self.y + self.height
-                rect = DrawRect(self.x, self.y, x2, y2, "lightgray")
+                rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
                 display_list.append(rect)
         for child in self.children:
             child.paint(display_list)
@@ -126,8 +164,11 @@ class InlineLayout:
         else:
             if node.tag == "br":
                 self.new_line()
-            for child in node.children:
-                self.recurse(child)
+            elif node.tag == "input" or node.tag == "button":
+                self.input(node)
+            else:
+                for child in node.children:
+                    self.recurse(child)
 
     def text(self, node):
         weight = node.style["font-weight"]
@@ -145,7 +186,26 @@ class InlineLayout:
             text = TextLayout(node, word, line, self.previous_word)
             line.children.append(text)
             self.previous_word = text
-            self.cursor_x += w + font.measure(" ")                
+            self.cursor_x += w + font.measure(" ")
+    
+    def get_font(self, node):
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        family = node.style["font-family"]
+        if style == "normal": style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * 0.75)
+        return get_font(size, weight, style, family)
+
+    def input(self, node):
+        w = INPUT_WIDTH_PX
+        if self.cursor_x + w > self.x + self.width:
+            self.new_line()
+        line = self.children[-1]
+        input = InputLayout(node, line, self.previous_word)
+        line.children.append(input)
+        self.previous_word = input
+        font = self.get_font(node)
+        self.cursor_x += w + font.measure(" ")
     
     def new_line(self):
         self.previous_word = None

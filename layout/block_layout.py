@@ -10,6 +10,8 @@ def layout_mode(node):
             if child.style.get("display", "inline") == "block":
                 return "block"
         return "inline"
+    elif node.tag == "input":
+        return "inline"
     else:
         return "block"
 
