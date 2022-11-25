@@ -142,7 +142,11 @@ class Tab:
             body += "&" + name + "=" + value
         body = body[1:]
         url = resolve_url(elt.attributes["action"], self.url)
-        self.load(url, req_body=body)
+        if "method" in elt.attributes and elt.attributes["method"].upper() == "GET":
+            url += "?" + body
+            self.load(url)
+        else:
+            self.load(url, req_body=body)
     
     def keypress(self, char):
         if self.focus:

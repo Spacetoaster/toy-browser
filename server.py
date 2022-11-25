@@ -9,6 +9,10 @@ def do_request(method, url, headers, body):
     elif method == "POST" and url == "/add":
         params = form_decode(body)
         return "200 OK", add_entry(params)
+    elif method == "GET" and "/add?" in url:
+        query_data = url.split("?", 1)[1]
+        query_data = form_decode(query_data)
+        return "200 OK", add_entry(query_data)
     else:
         return "404 Not Found", not_found(url, method)
 
@@ -16,7 +20,7 @@ def show_comments():
     out = "<!doctype html>"
     for entry in ENTRIES:
         out += "<p>" + entry + "</p>"
-    out += "<form action=add method=post>"
+    out += "<form action=add method=get>"
     out +=   "<p><input name=guest></p>"
     out +=   "<p><button>Sign the book!</button></p>"
     out += "</form>"
