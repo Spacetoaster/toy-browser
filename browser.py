@@ -123,6 +123,15 @@ class Tab:
                     elt = elt.parent
             elt = elt.parent
     
+    def submit_form_by_enter(self):
+        if not self.focus:
+            return
+        elt = self.focus
+        while elt:
+            if elt.tag == "form" and "action" in elt.attributes:
+                return self.submit_form(elt)
+            elt = elt.parent
+
     def submit_form(self, elt):
         inputs = [node for node in tree_to_list(elt, []) if isinstance(node, Element)
                   and node.tag == "input" and "name" in node.attributes]
@@ -338,6 +347,10 @@ class Browser:
     def handle_enter(self, e):
         if self.focus == "address bar":
             self.tabs[self.active_tab].load(self.address_bar)
+            self.focus = None
+            self.draw()
+        if self.focus == "content":
+            self.tabs[self.active_tab].submit_form_by_enter()
             self.focus = None
             self.draw()
     
