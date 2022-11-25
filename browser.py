@@ -1,6 +1,6 @@
 import sys
 from helpers import resolve_url, tree_to_list
-from layout.inline_layout import get_font, visited_urls
+from layout.inline_layout import get_font, visited_urls, InputLayout
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 import tkinter
@@ -8,6 +8,7 @@ import tkinter.font
 from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
+import urllib.parse
 
 def handle_special_pages(url, browser):
     if url == "about:bookmarks":
@@ -27,21 +28,26 @@ class Tab:
         self.future = []
         self.url = ""
         self.browser = browser
+        self.rules = None
+        self.nodes = None
+        self.focus = None
     
-    def load(self, url, back_or_forward=False):
+    def load(self, url, back_or_forward=False, req_body=None):
+        only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
         self.history.append(url)
-        url_changed = self.url.split("#")[0] != url.split("#")[0] if self.url else True
         self.url = url
-        if url_changed:
+        if only_fragment_changed:
+            self.scroll_to_fragment(url)
+        else:
             headers, body, view_source = handle_special_pages(url, self.browser)
             if not body:
-                headers, body, view_source = request(url)
+                headers, body, view_source = request(url, payload=req_body)
             if view_source:
                 self.nodes = ViewSourceParser(body).parse()
             else:
                 self.nodes = HTMLParser(body).parse()
             # print_tree(self.nodes)
-            rules = self.default_style_sheet.copy()
+            self.rules = self.default_style_sheet.copy()
             links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
                     if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
                     and node.attributes.get("rel") == "stylesheet"]
@@ -52,22 +58,23 @@ class Tab:
                 except:
                     print("error downloading stylesheet {}".format(link))
                     continue
-                rules.extend(CSSParser(body).parse())
+                self.rules.extend(CSSParser(body).parse())
             inline_styles = [node for node in tree_to_list(self.nodes, []) if isinstance(node, Element) and node.tag == "style"]
             for node in inline_styles:
                 if node.children:
-                    rules.extend(CSSParser(node.children[0].text).parse())
-            style(self.nodes, sorted(rules, key=cascade_priority))
-            self.document = DocumentLayout(self.nodes)
-            self.document.layout()
-            self.display_list = []
-            self.document.paint(self.display_list)
+                    self.rules.extend(CSSParser(node.children[0].text).parse())
+            self.render()
             self.scroll = 0
-            self.scroll_to_fragment(url)
-        else:
             self.scroll_to_fragment(url)
         if not back_or_forward:
             self.future = []
+    
+    def render(self):
+        style(self.nodes, sorted(self.rules, key=cascade_priority))
+        self.document = DocumentLayout(self.nodes)
+        self.document.layout()
+        self.display_list = []
+        self.document.paint(self.display_list)
     
     def go_back(self):
         if len(self.history) > 1:
@@ -105,7 +112,33 @@ class Tab:
                     return self.load(url)
                 else:
                     return url
+            elif elt.tag == "input":
+                self.focus = elt
+                elt.attributes["value"] = ""
+                self.render()
+            elif elt.tag == "button":
+                while elt:
+                    if elt.tag == "form" and "action" in elt.attributes:
+                        return self.submit_form(elt)
+                    elt = elt.parent
             elt = elt.parent
+    
+    def submit_form(self, elt):
+        inputs = [node for node in tree_to_list(elt, []) if isinstance(node, Element)
+                  and node.tag == "input" and "name" in node.attributes]
+        body = ""
+        for input in inputs:
+            name = urllib.parse.quote(input.attributes["name"])
+            value = urllib.parse.quote(input.attributes.get("value", ""))
+            body += "&" + name + "=" + value
+        body = body[1:]
+        url = resolve_url(elt.attributes["action"], self.url)
+        self.load(url, req_body=body)
+    
+    def keypress(self, char):
+        if self.focus:
+            self.focus.attributes["value"] += char
+            self.render()
     
     def scroll_to_fragment(self, url):
         fragment = url.split("#")[1] if "#" in url else None
@@ -124,6 +157,15 @@ class Tab:
             if cmd.top > self.scroll + self.browser.height - CHROME_PX: continue
             if cmd.bottom < self.scroll: continue
             cmd.execute(self.scroll - CHROME_PX, canvas)
+        if self.focus:
+            focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
+                    and isinstance(obj, InputLayout)]
+            if focus_objects:
+                obj = focus_objects[0]
+                text = self.focus.attributes.get("value", "")
+                x = obj.x + obj.font.measure(text)
+                y = obj.y - self.scroll + CHROME_PX
+                canvas.create_line(x, y, x, y + obj.height)
         self.drawScrollbar(canvas)
     
     def drawScrollbar(self, canvas):
@@ -248,6 +290,7 @@ class Browser:
     
     def handle_click(self, e):
         if e.y < CHROME_PX:
+            self.focus = None
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.active_tab = int((e.x - 40) / 80)
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
@@ -262,6 +305,7 @@ class Browser:
             elif self.width - 50 <= e.x < self.width - 10 and 50 <= e.y < 90:
                 self.bookmark()
         else:
+            self.focus = "content"
             self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
         self.draw()
     
@@ -286,6 +330,10 @@ class Browser:
             self.address_bar = prefix + e.char + suffix
             self.text_cursor_position += 1
             self.draw()
+        elif self.focus == "content":
+            self.tabs[self.active_tab].keypress(e.char)
+            self.draw()
+            
     
     def handle_enter(self, e):
         if self.focus == "address bar":

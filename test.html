@@ -49,7 +49,10 @@ int main (int argc, char *argv[]) {
         <div class="a" id="fragment">
             <div>a child in another .a that doesn't have .b but has &lt;div&gt;</div>
         </div>
-        <input />
-        <button>Submit</button>
+        <form action="/submit_form">
+            <input name="test" value="some val" />
+            <input name="other" value="bla" />
+            <button>Submit</button>
+        </form>
     </body>
 </html>

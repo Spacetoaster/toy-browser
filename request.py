@@ -5,20 +5,24 @@ import cache
 
 MAX_REDIRECTS = 10
 
-def build_request(host, path):
+def build_request(host, path, payload = None):
+    method = "POST" if payload else "GET"
     request_headers = {
         "HOST": host,
         "Connection": "close",
         "User-Agent": "Spacetoaster's Toy Browser",
         "Accept-Encoding": "gzip",
     }
-    request = "GET {} HTTP/1.1\r\n".format(path).encode("utf8")
+    body = "{} {} HTTP/1.1\r\n".format(method, path)
     for header, value in request_headers.items():
-        request += "{}: {}\r\n".format(header, value).encode("utf8")
-    request += "\r\n".encode("utf8")
-    return request
+        body += "{}: {}\r\n".format(header, value)
+    if payload:
+        length = len(payload.encode("utf8"))
+        body += "Content-Length: {}\r\n".format(length)
+    body += "\r\n" + (payload if payload else "")
+    return body.encode("utf8")
 
-def request_http(scheme, url, num_redirects):
+def request_http(scheme, url, num_redirects = 0, payload = None):
     port = 80 if scheme == "http" else 443
     host, path = url.split("/", 1)
     if ":" in host:
@@ -36,7 +40,7 @@ def request_http(scheme, url, num_redirects):
         s = ctx.wrap_socket(s, server_hostname=host)
 
     s.connect((host, port))
-    request = build_request(host, path)
+    request = build_request(host, path, payload)
     s.send(request)
 
     response = s.makefile("rb")
@@ -57,7 +61,7 @@ def request_http(scheme, url, num_redirects):
 
     assert status == "200", "{}: {}".format(status, explanation)
     body = ""
-    if headers["content-encoding"] == "gzip":
+    if "content-encoding" in headers and headers["content-encoding"] == "gzip":
         if "transfer-encoding" in headers and headers["transfer-encoding"] == "chunked":
             all_chunks = b''
             while True:
@@ -74,7 +78,7 @@ def request_http(scheme, url, num_redirects):
             body_decompressed = gzip.decompress(response.read())
             body = body_decompressed.decode('utf-8')
     else:
-        body = response.read()
+        body = response.read().decode('utf-8')
 
     s.close()
     cache.try_to_cache("{}://{}".format(scheme, url), headers, body)
@@ -92,15 +96,17 @@ def request_file(url):
     body = file.read()
     return None, body
 
-def request(url, num_redirects = 0):
+def request(url, num_redirects = 0, payload=None):
     headers, body = None, None
     view_source = False
     if url.startswith("view-source:"):
         view_source = True
         url = url[len("view-source:"):]
+    
+    method = "POST" if payload else "GET"
 
     cached_response = cache.get_cached_response(url)
-    if cached_response:
+    if cached_response and method == "GET":
         return cached_response[0], cached_response[1], view_source
     
     scheme, rest = url.split(":", 1)
@@ -108,7 +114,7 @@ def request(url, num_redirects = 0):
     assert scheme in ["http", "https", "file",
                       "data"], "Unknown scheme {}".format(scheme)
     if scheme in ["http", "https"]:
-        headers, body = request_http(scheme, url, num_redirects)
+        headers, body = request_http(scheme, url, num_redirects, payload)
     elif scheme == "file":
         headers, body = request_file(url)
     elif scheme == "data":

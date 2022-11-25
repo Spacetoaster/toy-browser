@@ -19,7 +19,15 @@
       "program": "browser.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["https://browser.engineering/styles.html"]
+      "args": ["http://localhost:8000/"]
+    },
+    {
+      "name": "Python: Server",
+      "type": "python",
+      "request": "launch",
+      "program": "server.py",
+      "console": "integratedTerminal",
+      "justMyCode": true,
     }
   ]
 }
