@@ -168,6 +168,14 @@ class Tab:
     def blur(self):
         self.focus = None
     
+    def switch_to_next_input(self):
+        if self.focus and self.focus.tag == "input":
+            input_elements = [obj.node for obj in tree_to_list(self.document, []) if isinstance(obj.node, Element)
+                              and obj.node.tag == "input"]
+            self.focus = input_elements[(input_elements.index(self.focus) + 1) % len(input_elements)]
+            self.focus.attributes["value"] = ""
+            self.render()
+
     def draw(self, canvas):
         for cmd in self.display_list:
             if cmd.top > self.scroll + self.browser.height - CHROME_PX: continue
@@ -228,6 +236,11 @@ class Browser:
         self.window.bind("<BackSpace>", self.handle_backspace)
         self.window.bind("<Left>", self.handle_left)
         self.window.bind("<Right>", self.handle_right)
+        self.window.bind("<Tab>", self.handle_tab)
+
+    def handle_tab(self, e):
+        self.tabs[self.active_tab].switch_to_next_input()
+        self.draw()
     
     def draw(self):
         self.canvas.delete("all")
