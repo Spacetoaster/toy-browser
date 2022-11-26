@@ -1,6 +1,6 @@
 from parser import Element, Text
 import tkinter.font
-from .drawing import DrawRect, DrawText
+from .drawing import DrawRect, DrawText, DrawCheckmark
 from constants import INPUT_WIDTH_PX
 
 FONTS = {}
@@ -24,6 +24,7 @@ class InputLayout:
         self.children = []
         self.parent = parent
         self.previous = previous
+        self.is_checkbox = self.node.tag == "input" and self.node.attributes.get("type", "") == "checkbox"
     
     def layout(self):
         weight = self.node.style["font-weight"] 
@@ -33,6 +34,8 @@ class InputLayout:
         size = int(float(self.node.style["font-size"][:-2]) * 0.75)
         self.font = get_font(size, weight, style, family)
         self.width = INPUT_WIDTH_PX
+        if self.is_checkbox:
+            self.width = self.font.metrics("linespace")
 
         if self.previous:
             space = self.previous.font.measure(" ")
@@ -56,7 +59,11 @@ class InputLayout:
             text = self.node.children[0].text
         
         color = self.node.style["color"]
-        display_list.append(DrawText(self.x, self.y, text, self.font, color))
+        if self.is_checkbox:
+            if bool(self.node.attributes.get("checked", False)):
+                display_list.append(DrawCheckmark(self.x, self.y, self.x + self.width, self.y + self.height))
+        else:
+            display_list.append(DrawText(self.x, self.y, text, self.font, color))
 
 class LineLayout:
     def __init__(self, node, parent, previous):

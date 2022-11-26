@@ -114,7 +114,10 @@ class Tab:
                     return url
             elif elt.tag == "input":
                 self.focus = elt
-                elt.attributes["value"] = ""
+                if elt.attributes.get("type", "") == "checkbox":
+                    elt.attributes["checked"] = True if "checked" not in elt.attributes else not bool(elt.attributes["checked"])
+                else:
+                    elt.attributes["value"] = ""
                 self.render()
             elif elt.tag == "button":
                 while elt:
@@ -138,7 +141,14 @@ class Tab:
         body = ""
         for input in inputs:
             name = urllib.parse.quote(input.attributes["name"])
-            value = urllib.parse.quote(input.attributes.get("value", ""))
+            is_checkbox = input.attributes.get("type", "") == "checkbox"
+            if is_checkbox:
+                if bool(input.attributes.get("checked", False)):
+                    value = urllib.parse.quote(input.attributes.get("value", "")) if "value" in input.attributes else "on"
+                else:
+                    continue
+            else:
+                value = urllib.parse.quote(input.attributes.get("value", ""))
             body += "&" + name + "=" + value
         body = body[1:]
         url = resolve_url(elt.attributes["action"], self.url)
@@ -150,8 +160,9 @@ class Tab:
     
     def keypress(self, char):
         if self.focus:
-            self.focus.attributes["value"] += char
-            self.render()
+            if self.focus.tag == "input" and self.focus.attributes.get("type", "") != "checkbox":
+                self.focus.attributes["value"] += char
+                self.render()
     
     def scroll_to_fragment(self, url):
         fragment = url.split("#")[1] if "#" in url else None
@@ -186,10 +197,12 @@ class Tab:
                     and isinstance(obj, InputLayout)]
             if focus_objects:
                 obj = focus_objects[0]
-                text = self.focus.attributes.get("value", "")
-                x = obj.x + obj.font.measure(text)
-                y = obj.y - self.scroll + CHROME_PX
-                canvas.create_line(x, y, x, y + obj.height, fill="black")
+                type = self.focus.attributes.get("type", "")
+                if type != "checkbox":
+                    text = self.focus.attributes.get("value", "")
+                    x = obj.x + obj.font.measure(text)
+                    y = obj.y - self.scroll + CHROME_PX
+                    canvas.create_line(x, y, x, y + obj.height, fill="black")
         self.drawScrollbar(canvas)
     
     def drawScrollbar(self, canvas):

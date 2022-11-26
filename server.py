@@ -23,6 +23,7 @@ def show_comments():
     out += "<form action=add method=get>"
     out +=   "<p><input name=guest></p>"
     out +=   "<p><input name=text></p>"
+    out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
     out +=   "<p><button>Sign the book!</button></p>"
     out += "</form>"
     return out
