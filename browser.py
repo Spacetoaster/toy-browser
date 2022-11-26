@@ -165,6 +165,9 @@ class Tab:
         max_y = self.document.height - (self.browser.height - CHROME_PX)
         self.scroll = min(element.y, max_y)
     
+    def blur(self):
+        self.focus = None
+    
     def draw(self, canvas):
         for cmd in self.display_list:
             if cmd.top > self.scroll + self.browser.height - CHROME_PX: continue
@@ -178,7 +181,7 @@ class Tab:
                 text = self.focus.attributes.get("value", "")
                 x = obj.x + obj.font.measure(text)
                 y = obj.y - self.scroll + CHROME_PX
-                canvas.create_line(x, y, x, y + obj.height)
+                canvas.create_line(x, y, x, y + obj.height, fill="black")
         self.drawScrollbar(canvas)
     
     def drawScrollbar(self, canvas):
@@ -304,6 +307,7 @@ class Browser:
     def handle_click(self, e):
         if e.y < CHROME_PX:
             self.focus = None
+            self.tabs[self.active_tab].blur()
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.active_tab = int((e.x - 40) / 80)
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
