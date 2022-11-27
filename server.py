@@ -20,7 +20,7 @@ def show_comments():
     out = "<!doctype html>"
     for entry in ENTRIES:
         out += "<p>" + entry + "</p>"
-    out += "<form action=add method=get>"
+    out += "<form action=add method=post>"
     out +=   "<p><input name=guest></p>"
     out +=   "<p><input name=text></p>"
     out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
@@ -77,6 +77,7 @@ def handle_connection(conx):
     status, body = do_request(method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
+    # response += "Cache-Control: max-age=10000\r\n"
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close()

@@ -5,6 +5,7 @@ from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 import tkinter
 import tkinter.font
+from tkinter.messagebox import askyesno
 from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
@@ -34,7 +35,7 @@ class Tab:
     
     def load(self, url, back_or_forward=False, req_body=None):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
-        self.history.append(url)
+        self.history.append((url, req_body))
         self.url = url
         if only_fragment_changed:
             self.scroll_to_fragment(url)
@@ -78,14 +79,28 @@ class Tab:
     
     def go_back(self):
         if len(self.history) > 1:
+            _, last_body = self.history[-1]
+            if last_body:
+                confirmed = self.confirm_form_resubmission()
+                if not confirmed:
+                    return
             forward = self.history.pop()
             self.future.append(forward)
-            back = self.history.pop()
-            self.load(back, back_or_forward=True)
-    
+            back_url, back_body = self.history.pop()
+            self.load(back_url, back_or_forward=True, req_body=back_body)
+
     def go_forward(self):
         if len(self.future) > 0:
-            self.load(self.future.pop(0), back_or_forward=True)
+            _, next_body = self.future[-1]
+            if next_body:
+                confirmed = self.confirm_form_resubmission()
+                if not confirmed:
+                    return
+            next_url, next_body = self.future.pop()
+            self.load(next_url, back_or_forward=True, req_body=next_body)
+
+    def confirm_form_resubmission(self):
+        return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
     
     def scrolldown(self):
         max_y = self.document.height - (self.browser.height - CHROME_PX)
