@@ -1,30 +1,54 @@
 import socket
 import urllib.parse
 
-ENTRIES = ['Pavel was here']
+TOPICS = { "browsers": ["Pavel was here"] }
 
 def do_request(method, url, headers, body):
-    if method == "GET" and url == "/":
-        return "200 OK", show_comments()
-    elif method == "POST" and url == "/add":
+    if method == "POST" and url == "/add_topic":
         params = form_decode(body)
-        return "200 OK", add_entry(params)
+        return "200 OK", add_topic(params)
+    if method == "POST" and "/add" in url:
+        topic = url[1:].split("/", 1)[0]
+        params = form_decode(body)
+        return "200 OK", add_entry(params, topic)
     elif method == "GET" and "/add?" in url:
         query_data = url.split("?", 1)[1]
         query_data = form_decode(query_data)
         return "200 OK", add_entry(query_data)
+    if method == "GET" and url == "/":
+        return "200 OK", list_topics()
+    elif method == "GET" and url.startswith("/"):
+        topic = url[1:]
+        if topic in TOPICS:
+            return "200 OK", show_comments(topic)
+        else:
+            return "404 Not Found", not_found(url, method)
     else:
         return "404 Not Found", not_found(url, method)
 
-def show_comments():
+def show_comments(topic):
+    action = "'/{}/add'".format(topic)
     out = "<!doctype html>"
-    for entry in ENTRIES:
+    out += "<h1>Posts about {}</h1>".format(topic)
+    for entry in TOPICS[topic]:
         out += "<p>" + entry + "</p>"
-    out += "<form action=add method=post>"
+    out += "<form action={} method=post>".format(action)
     out +=   "<p><input name=guest></p>"
-    out +=   "<p><input name=text></p>"
-    out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
-    out +=   "<p><button>Sign the book!</button></p>"
+    # out +=   "<p><input name=text></p>"
+    # out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
+    out +=   "<p><button>Post</button></p>"
+    out += "</form>"
+    out += "<a href='/'>back to topics</a>"
+    return out
+
+def list_topics():
+    out = "<!doctype html>"
+    out += "<h1>List of topics</h1>"
+    for topic in TOPICS:
+        out += "<p><a href='/{}'>".format(topic) + topic + "</a></p>"
+    out += "<form action=add_topic method=post>"
+    out +=   "<p><input name=topic></p>"
+    out +=   "<p><button>New Topic</button></p>"
     out += "</form>"
     return out
 
@@ -37,10 +61,17 @@ def form_decode(body):
         params[name] = value
     return params
 
-def add_entry(params):
+def add_entry(params, topic):
     if 'guest' in params:
-        ENTRIES.append(params['guest'])
-    return show_comments()
+        TOPICS[topic].append(params['guest'])
+    return show_comments(topic)
+
+def add_topic(params):
+    if 'topic' in params:
+        TOPICS[params['topic']] = []
+        return show_comments(params['topic'])
+    else:
+        return list_topics()
 
 def not_found(url, method):
     out = "<!doctyle html>"
