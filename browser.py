@@ -10,6 +10,7 @@ from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
 import urllib.parse
+import dukpy
 
 def handle_special_pages(url, browser):
     if url == "about:bookmarks":
@@ -48,6 +49,12 @@ class Tab:
             else:
                 self.nodes = HTMLParser(body).parse()
             # print_tree(self.nodes)
+            scripts = [node.attributes["src"] for node in tree_to_list(self.nodes, [])
+                       if isinstance(node, Element) and node.tag == "script"
+                       and "src" in node.attributes]
+            for script in scripts:
+                header, body, _ = request(resolve_url(script, url))
+                print("Script returned: ", dukpy.evaljs(body))
             self.rules = self.default_style_sheet.copy()
             links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
                     if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
