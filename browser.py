@@ -21,6 +21,16 @@ def handle_special_pages(url, browser):
         return None, body, False
     return None, None, False
 
+class JSContext:
+    def __init__(self):
+        self.interp = dukpy.JSInterpreter()
+        self.interp.export_function("log", print)
+        with open("runtime.js") as f:
+            self.interp.evaljs(f.read())
+
+    def run(self, code):
+        return self.interp.evaljs(code)
+
 class Tab:
     def __init__(self, browser):
         with open("browser.css") as f:
@@ -52,9 +62,10 @@ class Tab:
             scripts = [node.attributes["src"] for node in tree_to_list(self.nodes, [])
                        if isinstance(node, Element) and node.tag == "script"
                        and "src" in node.attributes]
+            self.js = JSContext()
             for script in scripts:
                 header, body, _ = request(resolve_url(script, url))
-                print("Script returned: ", dukpy.evaljs(body))
+                self.js.run(body)
             self.rules = self.default_style_sheet.copy()
             links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
                     if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
