@@ -21,7 +21,7 @@ def handle_special_pages(url, browser):
         return None, body, False
     return None, None, False
 
-EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(dukpy.type)"
+EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
 
 class JSContext:
     def __init__(self, tab):
@@ -59,7 +59,8 @@ class JSContext:
     
     def dispatch_event(self, type, elt):
         handle = self.node_to_handle.get(elt, -1)
-        self.interp.evaljs(EVENT_DISPATCH_CODE, type=type, handle=handle)
+        do_default = self.interp.evaljs(EVENT_DISPATCH_CODE, type=type, handle=handle)
+        return not do_default
     
     def innerHTML_set(self, handle, s):
         doc = HTMLParser("<html><body>" + s + "</body></html>").parse()
@@ -180,7 +181,7 @@ class Tab:
             if isinstance(elt, Text):
                 pass
             elif elt.tag == "a" and "href" in elt.attributes:
-                self.js.dispatch_event("click", elt)
+                if self.js.dispatch_event("click", elt): return
                 unresolved_url = elt.attributes["href"]
                 if unresolved_url not in visited_urls: visited_urls[unresolved_url] = True
                 url = resolve_url(unresolved_url, self.url)
@@ -189,7 +190,7 @@ class Tab:
                 else:
                     return url
             elif elt.tag == "input":
-                self.js.dispatch_event("click", elt)
+                if self.js.dispatch_event("click", elt): return
                 self.focus = elt
                 if elt.attributes.get("type", "") == "checkbox":
                     elt.attributes["checked"] = True if "checked" not in elt.attributes else not bool(elt.attributes["checked"])
@@ -197,7 +198,7 @@ class Tab:
                     elt.attributes["value"] = ""
                 self.render()
             elif elt.tag == "button":
-                self.js.dispatch_event("click", elt)
+                if self.js.dispatch_event("click", elt): return
                 while elt:
                     if elt.tag == "form" and "action" in elt.attributes:
                         return self.submit_form(elt)
@@ -214,7 +215,7 @@ class Tab:
             elt = elt.parent
 
     def submit_form(self, elt):
-        self.js.dispatch_event("submit", elt)
+        if self.js.dispatch_event("submit", elt): return
         inputs = [node for node in tree_to_list(elt, []) if isinstance(node, Element)
                   and node.tag == "input" and "name" in node.attributes]
         body = ""
@@ -240,7 +241,7 @@ class Tab:
     def keypress(self, char):
         if self.focus:
             if self.focus.tag == "input" and self.focus.attributes.get("type", "") != "checkbox":
-                self.js.dispatch_event("keydown", self.focus)
+                if self.js.dispatch_event("keydown", self.focus): return
                 self.focus.attributes["value"] += char
                 self.render()
     

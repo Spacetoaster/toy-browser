@@ -71,7 +71,7 @@ def form_decode(body):
     return params
 
 def add_entry(params, topic):
-    if 'guest' in params:
+    if 'guest' in params and len(params['guest']) <= 100:
         TOPICS[topic].append(params['guest'])
     return show_comments(topic)
 
