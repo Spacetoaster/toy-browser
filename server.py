@@ -17,6 +17,12 @@ def do_request(method, url, headers, body):
         return "200 OK", add_entry(query_data)
     if method == "GET" and url == "/":
         return "200 OK", list_topics()
+    elif method == "GET" and url == "/comment.js":
+        with open("comment.js") as f:
+            return "200 OK", f.read()
+    elif method == "GET" and url == "/comment.css":
+        with open("comment.css") as f:
+            return "200 OK", f.read()
     elif method == "GET" and url.startswith("/"):
         topic = url[1:]
         if topic in TOPICS:
@@ -29,6 +35,7 @@ def do_request(method, url, headers, body):
 def show_comments(topic):
     action = "'/{}/add'".format(topic)
     out = "<!doctype html>"
+    out += "<link rel=stylesheet href=/comment.css></link>"
     out += "<h1>Posts about {}</h1>".format(topic)
     for entry in TOPICS[topic]:
         out += "<p>" + entry + "</p>"
@@ -37,7 +44,9 @@ def show_comments(topic):
     # out +=   "<p><input name=text></p>"
     # out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
     out +=   "<p><button>Post</button></p>"
+    out += "<label></label>"
     out += "</form>"
+    out += "<script src=/comment.js></script>"
     out += "<a href='/'>back to topics</a>"
     return out
 
