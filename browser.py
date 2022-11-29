@@ -21,15 +21,44 @@ def handle_special_pages(url, browser):
         return None, body, False
     return None, None, False
 
+EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(dukpy.type)"
+
 class JSContext:
-    def __init__(self):
+    def __init__(self, tab):
+        self.tab = tab
         self.interp = dukpy.JSInterpreter()
         self.interp.export_function("log", print)
+        self.interp.export_function("querySelectorAll", self.querySelectorAll)
+        self.interp.export_function("getAttribute", self.getAttribute)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
+        self.node_to_handle = {}
+        self.handle_to_node = {}
 
     def run(self, code):
         return self.interp.evaljs(code)
+
+    def get_handle(self, elt):
+        if elt not in self.node_to_handle:
+            handle = len(self.node_to_handle)
+            self.node_to_handle[elt] = handle
+            self.handle_to_node[handle] = elt
+        else:
+            handle = self.node_to_handle[elt]
+        return handle
+
+    def querySelectorAll(self, selector_text):
+        selector = CSSParser(selector_text).selector()
+        nodes = [node for node in tree_to_list(self.tab.nodes, []) if selector.matches(node)]
+        return [self.get_handle(node) for node in nodes]
+    
+    def getAttribute(self, handle, attr):
+        elt = self.handle_to_node[handle]
+        return elt.attributes.get(attr, None)
+    
+    def dispatch_event(self, type, elt):
+        handle = self.node_to_handle.get(elt, -1)
+        self.interp.evaljs(EVENT_DISPATCH_CODE, type=type, handle=handle)
 
 class Tab:
     def __init__(self, browser):
@@ -62,10 +91,13 @@ class Tab:
             scripts = [node.attributes["src"] for node in tree_to_list(self.nodes, [])
                        if isinstance(node, Element) and node.tag == "script"
                        and "src" in node.attributes]
-            self.js = JSContext()
+            self.js = JSContext(self)
             for script in scripts:
                 header, body, _ = request(resolve_url(script, url))
-                self.js.run(body)
+                try:
+                    self.js.run(body)
+                except dukpy.JSRuntimeError as e:
+                    print("Script", script, "crashed", e)
             self.rules = self.default_style_sheet.copy()
             links = [node.attributes["href"] for node in tree_to_list(self.nodes, [])
                     if isinstance(node, Element) and node.tag == "link" and "href" in node.attributes
@@ -138,6 +170,7 @@ class Tab:
             if isinstance(elt, Text):
                 pass
             elif elt.tag == "a" and "href" in elt.attributes:
+                self.js.dispatch_event("click", elt)
                 unresolved_url = elt.attributes["href"]
                 if unresolved_url not in visited_urls: visited_urls[unresolved_url] = True
                 url = resolve_url(unresolved_url, self.url)
@@ -146,6 +179,7 @@ class Tab:
                 else:
                     return url
             elif elt.tag == "input":
+                self.js.dispatch_event("click", elt)
                 self.focus = elt
                 if elt.attributes.get("type", "") == "checkbox":
                     elt.attributes["checked"] = True if "checked" not in elt.attributes else not bool(elt.attributes["checked"])
@@ -153,6 +187,7 @@ class Tab:
                     elt.attributes["value"] = ""
                 self.render()
             elif elt.tag == "button":
+                self.js.dispatch_event("click", elt)
                 while elt:
                     if elt.tag == "form" and "action" in elt.attributes:
                         return self.submit_form(elt)
@@ -169,6 +204,7 @@ class Tab:
             elt = elt.parent
 
     def submit_form(self, elt):
+        self.js.dispatch_event("submit", elt)
         inputs = [node for node in tree_to_list(elt, []) if isinstance(node, Element)
                   and node.tag == "input" and "name" in node.attributes]
         body = ""
@@ -194,6 +230,7 @@ class Tab:
     def keypress(self, char):
         if self.focus:
             if self.focus.tag == "input" and self.focus.attributes.get("type", "") != "checkbox":
+                self.js.dispatch_event("keydown", self.focus)
                 self.focus.attributes["value"] += char
                 self.render()
     
