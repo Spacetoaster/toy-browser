@@ -31,6 +31,7 @@ class JSContext:
         self.interp.export_function("querySelectorAll", self.querySelectorAll)
         self.interp.export_function("getAttribute", self.getAttribute)
         self.interp.export_function("innerHTML_set", self.innerHTML_set)
+        self.interp.export_function("children", self.children)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -70,6 +71,11 @@ class JSContext:
         for child in elt.children:
             child.parent = elt
         self.tab.render()
+
+    def children(self, handle):
+        elt = self.handle_to_node[handle]
+        handles = [self.get_handle(child) for child in elt.children if isinstance(child, Element)]
+        return handles
 
 class Tab:
     def __init__(self, browser):

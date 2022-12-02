@@ -40,6 +40,13 @@ Object.defineProperty(Node.prototype, 'innerHTML', {
   }
 })
 
+Object.defineProperty(Node.prototype, 'children', {
+  get: function(s) {
+    var handles = call_python("children", this.handle)
+    return handles.map(function(h) { return new Node(h) })
+  }
+})
+
 function Event(type) {
   this.type = type
   this.do_default = true;
