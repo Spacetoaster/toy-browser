@@ -13,3 +13,24 @@ for (var i = 0; i < inputs.length; i++) {
   inputs[i].addEventListener("keydown", lengthCheck)
 }
 
+var testButtons = document.querySelectorAll(".testButtons")[0].children
+var blabla = document.querySelectorAll(".blabla")[0]
+testButtons[0].addEventListener("click", function(e) {
+  e.preventDefault()
+  var test = document.querySelectorAll(".innerHtmlTest")
+  var n = document.createElement("h1")
+  n.innerHTML = "appended"
+  test[0].appendChild(n)
+})
+testButtons[1].addEventListener("click", function(e) {
+  e.preventDefault()
+  var test = document.querySelectorAll(".innerHtmlTest")
+  var num_children = test[0].children.length
+  if (num_children < 1) {
+    return
+  }
+  var new_node = document.createElement("h1")
+  new_node.innerHTML = "inserted before"
+  last_child = test[0].children[num_children - 1]
+  test[0].insertBefore(blabla, last_child)
+})

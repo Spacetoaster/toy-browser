@@ -32,6 +32,9 @@ class JSContext:
         self.interp.export_function("getAttribute", self.getAttribute)
         self.interp.export_function("innerHTML_set", self.innerHTML_set)
         self.interp.export_function("children", self.children)
+        self.interp.export_function("createElement", self.create_element)
+        self.interp.export_function("appendChild", self.append_child)
+        self.interp.export_function("insertBefore", self.insert_before)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -76,6 +79,43 @@ class JSContext:
         elt = self.handle_to_node[handle]
         handles = [self.get_handle(child) for child in elt.children if isinstance(child, Element)]
         return handles
+
+    def create_element(self, tagName):
+        elt = Element(tagName, {}, None)
+        return self.get_handle(elt)
+
+    def append_child(self, handle, child_handle):
+        if not handle in self.handle_to_node or not child_handle in self.handle_to_node:
+            return
+        node = self.handle_to_node[handle]
+        child = self.handle_to_node[child_handle]
+        node.children.append(child)
+        child.parent = node
+        self.tab.render()
+
+    def insert_before(self, handle, new_node_handle, child_handle):
+        assert handle in self.handle_to_node, "can't find matching parent for handle"
+        assert new_node_handle in self.handle_to_node, "can't find matching new_node for handle"
+        node = self.handle_to_node[handle]
+        new_node = self.handle_to_node[new_node_handle]
+        child_index = None
+        deleted_node_index = None
+        if child_handle:
+            assert child_handle in self.handle_to_node, "can't find matching child for handle"
+            child = self.handle_to_node[child_handle]
+            assert child in node.children, "child node is not a child of parent"
+            child_index = node.children.index(child)
+        if new_node in node.children:
+            deleted_node_index = node.children.index(new_node)
+            node.children.remove(new_node)
+        if child_index:
+            if child_index >= deleted_node_index:
+                child_index -= 1
+            node.children.insert(child_index, new_node)
+        else:
+            node.children.append(new_node)
+        new_node.parent = node
+        self.tab.render()
 
 class Tab:
     def __init__(self, browser):

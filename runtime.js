@@ -5,6 +5,10 @@ document = {
   querySelectorAll: function(s) { 
     var handles = call_python("querySelectorAll", s);
     return handles.map(function(h) { return new Node(h) });
+  },
+  createElement: function(tagName) {
+    var handle = call_python("createElement", tagName)
+    return new Node(handle)
   }
 }
 
@@ -32,6 +36,15 @@ Node.prototype.dispatchEvent = function(evt) {
     list[i].call(this, evt);
   }
   return evt.do_default;
+}
+
+Node.prototype.appendChild = function(child) {
+  return call_python("appendChild", this.handle, child.handle)
+}
+
+Node.prototype.insertBefore = function(newNode, childNode) {
+  childParam = childNode ? childNode.handle : null
+  return call_python("insertBefore", this.handle, newNode.handle, childParam)
 }
 
 Object.defineProperty(Node.prototype, 'innerHTML', {
