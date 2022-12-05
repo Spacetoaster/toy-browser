@@ -85,8 +85,8 @@ class JSContext:
     
     def dispatch_event(self, type, elt):
         handle = self.node_to_handle.get(elt, -1)
-        do_default = self.interp.evaljs(EVENT_DISPATCH_CODE, type=type, handle=handle)
-        return not do_default
+        ret = self.interp.evaljs(EVENT_DISPATCH_CODE, type=type, handle=handle)
+        return ret["do_default"], ret["stop_propagation"]
     
     def innerHTML_set(self, handle, s):
         doc = HTMLParser("<html><body>" + s + "</body></html>").parse()
@@ -263,29 +263,32 @@ class Tab:
         while elt:
             if isinstance(elt, Text):
                 pass
-            elif elt.tag == "a" and "href" in elt.attributes:
-                if self.js.dispatch_event("click", elt): return
-                unresolved_url = elt.attributes["href"]
-                if unresolved_url not in visited_urls: visited_urls[unresolved_url] = True
-                url = resolve_url(unresolved_url, self.url)
-                if load:
-                    return self.load(url)
-                else:
-                    return url
-            elif elt.tag == "input":
-                if self.js.dispatch_event("click", elt): return
-                self.focus = elt
-                if elt.attributes.get("type", "") == "checkbox":
-                    elt.attributes["checked"] = True if "checked" not in elt.attributes else not bool(elt.attributes["checked"])
-                else:
-                    elt.attributes["value"] = ""
-                self.render()
-            elif elt.tag == "button":
-                if self.js.dispatch_event("click", elt): return
-                while elt:
-                    if elt.tag == "form" and "action" in elt.attributes:
-                        return self.submit_form(elt)
-                    elt = elt.parent
+            else:
+                do_default, stop_propagation = self.js.dispatch_event("click", elt)
+                if do_default:
+                    if elt.tag == "a" and "href" in elt.attributes:
+                        unresolved_url = elt.attributes["href"]
+                        if unresolved_url not in visited_urls: visited_urls[unresolved_url] = True
+                        url = resolve_url(unresolved_url, self.url)
+                        if load:
+                            self.load(url)
+                        else:
+                            return url
+                    elif elt.tag == "input":
+                        self.focus = elt
+                        if elt.attributes.get("type", "") == "checkbox":
+                            elt.attributes["checked"] = True if "checked" not in elt.attributes else not bool(elt.attributes["checked"])
+                        else:
+                            elt.attributes["value"] = ""
+                        self.render()
+                    elif elt.tag == "button":
+                        elt_form = elt
+                        while elt_form:
+                            if elt_form.tag == "form" and "action" in elt_form.attributes:
+                                return self.submit_form(elt_form)
+                            elt_form = elt_form.parent
+                if stop_propagation:
+                    return
             elt = elt.parent
     
     def submit_form_by_enter(self):
@@ -298,7 +301,8 @@ class Tab:
             elt = elt.parent
 
     def submit_form(self, elt):
-        if self.js.dispatch_event("submit", elt): return
+        do_default, _ = self.js.dispatch_event("submit", elt)
+        if not do_default: return
         inputs = [node for node in tree_to_list(elt, []) if isinstance(node, Element)
                   and node.tag == "input" and "name" in node.attributes]
         body = ""
@@ -324,7 +328,8 @@ class Tab:
     def keypress(self, char):
         if self.focus:
             if self.focus.tag == "input" and self.focus.attributes.get("type", "") != "checkbox":
-                if self.js.dispatch_event("keydown", self.focus): return
+                do_default, _ = self.js.dispatch_event("keydown", self.focus)
+                if not do_default: return
                 self.focus.attributes["value"] += char
                 self.render()
     

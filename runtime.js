@@ -35,7 +35,7 @@ Node.prototype.dispatchEvent = function(evt) {
   for (var i = 0; i < list.length; i++) {
     list[i].call(this, evt);
   }
-  return evt.do_default;
+  return { "do_default": evt.do_default, "stop_propagation": evt.stop_propagation };
 }
 
 Node.prototype.appendChild = function(child) {
@@ -68,8 +68,13 @@ Object.defineProperty(Node.prototype, 'children', {
 function Event(type) {
   this.type = type
   this.do_default = true;
+  this.stop_propagation = false;
 }
 
 Event.prototype.preventDefault = function() {
   this.do_default = false;
+}
+
+Event.prototype.stopPropagation = function() {
+  this.stop_propagation = true;
 }

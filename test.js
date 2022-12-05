@@ -13,24 +13,20 @@ for (var i = 0; i < inputs.length; i++) {
   inputs[i].addEventListener("keydown", lengthCheck)
 }
 
-testButtons.children[0].addEventListener("click", function(e) {
-  e.preventDefault()
-
-  var node_with_id = document.createElement("div")
-  node_with_id.innerHTML = "<div id='new_id'></div>"
-  test.insertBefore(node_with_id, null)
-  console.log(test)
-  console.log(new_id)
+buttonwithonclick.addEventListener("click", function(e) {
+  // e.preventDefault()
+  console.log("button clicked")
 })
 
-testButtons.children[1].addEventListener("click", function(e) {
-  e.preventDefault()
-
-  test.children[test.children.length - 1].removeChild(new_id)
-  console.log(test)
-  console.log(new_id)
+inner.addEventListener("click", function(e) {
+  console.log("inner clicked")
+  e.stopPropagation();
 })
 
+outer.addEventListener("click", function(e) {
+  console.log("outer clicked")
+})
 
-console.log(test)
-console.log(new_id)
+fragment_link.addEventListener("click", function(e) {
+  console.log("scrolling")
+})

@@ -7,11 +7,11 @@
                 color: blue;
             }
         </style>
-        <script src="test.js"></script>
+        <script defer src="test.js"></script>
     </head>
     <body>
         <h1>Hello World</h1>
-        <a href="#fragment">Go to fragment</a>
+        <a id="fragment_link" href="#fragment">Go to fragment</a>
         <p style="font: italic bold 20px Times;">This is an example html file</p>
         <p><b>bold</b><i>italic</i> and <b><i>bold italic</i></b> text example</p>
         <big>Text</big>Text<small>Text</small>
@@ -57,8 +57,11 @@ int main (int argc, char *argv[]) {
             <button>Submit</button>
         </form>
         <div id="testButtons">
-            <button>appendChild</button>
-            <button>removeChild</button>
+            <div id="outer">
+                <div id="inner">
+                    <button id="buttonwithonclick">appendChild</button>
+                </div>
+            </div>
         </div>
         <div id="test"></div>
     </body>

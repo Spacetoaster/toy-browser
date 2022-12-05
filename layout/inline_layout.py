@@ -27,7 +27,7 @@ class InputLayout:
         self.is_checkbox = self.node.tag == "input" and self.node.attributes.get("type", "") == "checkbox"
     
     def layout(self):
-        weight = self.node.style["font-weight"] 
+        weight = self.node.style["font-weight"]
         style = self.node.style["font-style"]
         family = self.node.style["font-family"]
         if style == "normal": style = "roman"
