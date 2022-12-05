@@ -35,6 +35,7 @@ class JSContext:
         self.interp.export_function("createElement", self.create_element)
         self.interp.export_function("appendChild", self.append_child)
         self.interp.export_function("insertBefore", self.insert_before)
+        self.interp.export_function("removeChild", self.remove_child)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -109,13 +110,24 @@ class JSContext:
             deleted_node_index = node.children.index(new_node)
             node.children.remove(new_node)
         if child_index:
-            if child_index >= deleted_node_index:
+            if deleted_node_index and child_index >= deleted_node_index:
                 child_index -= 1
             node.children.insert(child_index, new_node)
         else:
             node.children.append(new_node)
         new_node.parent = node
         self.tab.render()
+
+    def remove_child(self, handle, child_handle):
+        assert handle in self.handle_to_node, "can't find matching node for handle"
+        assert child_handle in self.handle_to_node, "can't find matching node for child handle"
+        parent = self.handle_to_node[handle]
+        child = self.handle_to_node[child_handle]
+        assert child in parent.children, "child node is not a child of parent"
+        parent.children.remove(child)
+        child.parent = None
+        self.tab.render()
+        return child_handle
 
 class Tab:
     def __init__(self, browser):
