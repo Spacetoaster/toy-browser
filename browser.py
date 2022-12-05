@@ -40,9 +40,30 @@ class JSContext:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
         self.handle_to_node = {}
+        self.add_global_vars_for_tree(self.tab.nodes)
 
     def run(self, code):
         return self.interp.evaljs(code)
+    
+    def clear_global_vars_for_tree(self, node):
+        nodes_with_id = [node for node in tree_to_list(node, [])
+                    if isinstance(node, Element) and node.attributes.get("id", "") != ""]
+        if "id" in node.attributes:
+            nodes_with_id.append(node)
+        for node in nodes_with_id:
+            id = node.attributes.get("id")
+            self.run("{} = undefined;".format(id))
+
+    def add_global_vars_for_tree(self, node):
+        nodes_with_id = [node for node in tree_to_list(node, [])
+                          if isinstance(node, Element) and node.attributes.get("id", "") != ""]
+        if "id" in node.attributes:
+            nodes_with_id.append(node)
+        for node in nodes_with_id:
+            id = node.attributes.get("id")
+            if not id: return
+            handle = self.get_handle(node)
+            self.run("var {} = new Node({});".format(id, handle))
 
     def get_handle(self, elt):
         if elt not in self.node_to_handle:
@@ -74,6 +95,7 @@ class JSContext:
         elt.children = new_nodes
         for child in elt.children:
             child.parent = elt
+            self.add_global_vars_for_tree(child)
         self.tab.render()
 
     def children(self, handle):
@@ -92,6 +114,7 @@ class JSContext:
         child = self.handle_to_node[child_handle]
         node.children.append(child)
         child.parent = node
+        self.add_global_vars_for_tree(node)
         self.tab.render()
 
     def insert_before(self, handle, new_node_handle, child_handle):
@@ -116,6 +139,7 @@ class JSContext:
         else:
             node.children.append(new_node)
         new_node.parent = node
+        self.add_global_vars_for_tree(new_node)
         self.tab.render()
 
     def remove_child(self, handle, child_handle):
@@ -127,6 +151,7 @@ class JSContext:
         parent.children.remove(child)
         child.parent = None
         self.tab.render()
+        self.clear_global_vars_for_tree(child)
         return child_handle
 
 class Tab:
