@@ -27,6 +27,6 @@ outer.addEventListener("click", function(e) {
   console.log("outer clicked")
 })
 
-fragment_link.addEventListener("click", function(e) {
+fragmentlink.addEventListener("click", function(e) {
   console.log("scrolling")
 })

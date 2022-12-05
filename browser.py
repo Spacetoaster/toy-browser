@@ -61,7 +61,8 @@ class JSContext:
             nodes_with_id.append(node)
         for node in nodes_with_id:
             id = node.attributes.get("id")
-            if not id: return
+            if not id or not id.isalpha():
+                continue
             handle = self.get_handle(node)
             self.run("var {} = new Node({});".format(id, handle))
 
