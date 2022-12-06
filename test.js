@@ -30,3 +30,11 @@ outer.addEventListener("click", function(e) {
 fragmentlink.addEventListener("click", function(e) {
   console.log("scrolling")
 })
+
+context = canvasNode.getContext("2d");
+context.fillRect(0, 0, 50, 50);
+context.fillStyle = "yellow";
+context.fillRect(50, 50, 25, 25);
+context.fillStyle = "black";
+context.fillText("Hello world", 60, 60)
+context.fillText("Hello world", 65, 65)

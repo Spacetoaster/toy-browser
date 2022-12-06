@@ -52,6 +52,10 @@ Node.prototype.removeChild = function(childNode) {
   return new Node(removedChildHandle)
 }
 
+Node.prototype.getContext = function(_type) {
+  return new CanvasRenderingContext2D(this)
+}
+
 Object.defineProperty(Node.prototype, 'innerHTML', {
   set: function(s) {
     call_python("innerHTML_set", this.handle, s.toString());
@@ -64,6 +68,19 @@ Object.defineProperty(Node.prototype, 'children', {
     return handles.map(function(h) { return new Node(h) })
   }
 })
+
+function CanvasRenderingContext2D(node) { 
+  this.node = node;
+  this.fillStyle = "black";
+}
+
+CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
+  return call_python("canvas.fillRect", this.node.handle, x, y, w, h, this.fillStyle);
+}
+
+CanvasRenderingContext2D.prototype.fillText = function(text, x, y) {
+  return call_python("canvas.fillText", this.node.handle, text, x, y, this.fillStyle);
+}
 
 function Event(type) {
   this.type = type

@@ -1,5 +1,6 @@
 from parser import Text, Element
 from .inline_layout import InlineLayout
+from .canvas_layout import CanvasLayout
 
 def layout_mode(node):
     if isinstance(node, Text):
@@ -48,7 +49,8 @@ class BlockLayout:
         previous = None
         for child in self.node.children:
             if isinstance(child, Element) and child.tag == "head": continue
-            if layout_mode(child) == "inline":
+            if isinstance(child, Element) and child.tag == "canvas": next = CanvasLayout(child, self, previous)
+            elif layout_mode(child) == "inline":
                 next = InlineLayout(child, self, previous)
             else:
                 next = BlockLayout(child, self, previous)

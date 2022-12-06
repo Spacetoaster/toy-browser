@@ -1,8 +1,10 @@
 import sys
 from helpers import resolve_url, tree_to_list
 from layout.inline_layout import get_font, visited_urls, InputLayout
+from layout.canvas_layout import CanvasLayout, add_draw_cmd
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
+from layout.drawing import DrawRect, DrawText
 import tkinter
 import tkinter.font
 from tkinter.messagebox import askyesno
@@ -36,6 +38,8 @@ class JSContext:
         self.interp.export_function("appendChild", self.append_child)
         self.interp.export_function("insertBefore", self.insert_before)
         self.interp.export_function("removeChild", self.remove_child)
+        self.interp.export_function("canvas.fillRect", self.fill_rect)
+        self.interp.export_function("canvas.fillText", self.fill_text)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -154,6 +158,25 @@ class JSContext:
         self.tab.render()
         self.clear_global_vars_for_tree(child)
         return child_handle
+    
+    def fill_rect(self, handle, x, y, w, h, fillStyle):
+        canvas_element = self.handle_to_node[handle]
+        if not (isinstance(canvas_element, Element) and canvas_element.tag == "canvas"):
+            return
+        add_draw_cmd(canvas_element, DrawRect(x, y, x + w, y + h, fillStyle))
+        # only call render if document is already fully loaded
+        if self.tab.document:
+            self.tab.render()
+    
+    def fill_text(self, handle, text, x, y, fillStyle):
+        canvas_element = self.handle_to_node[handle]
+        if not (isinstance(canvas_element, Element) and canvas_element.tag == "canvas"):
+            return
+        font = get_font(10, "normal", "roman") 
+        add_draw_cmd(canvas_element, DrawText(x, y, text, font, fillStyle))
+        # only call render if document is already fully loaded
+        if self.tab.document:
+            self.tab.render()
 
 class Tab:
     def __init__(self, browser):
@@ -167,6 +190,7 @@ class Tab:
         self.rules = None
         self.nodes = None
         self.focus = None
+        self.document = None
     
     def load(self, url, back_or_forward=False, req_body=None):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
