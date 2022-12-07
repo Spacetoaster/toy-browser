@@ -40,6 +40,8 @@ class JSContext:
         self.interp.export_function("removeChild", self.remove_child)
         self.interp.export_function("canvas.fillRect", self.fill_rect)
         self.interp.export_function("canvas.fillText", self.fill_text)
+        self.interp.export_function("getStyle", self.get_style)
+        self.interp.export_function("setStyle", self.set_style)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -177,6 +179,29 @@ class JSContext:
         # only call render if document is already fully loaded
         if self.tab.document:
             self.tab.render()
+    
+    def get_style(self, handle):
+        elt = self.handle_to_node[handle]
+        if not isinstance(elt, Element): return
+        style = elt.attributes.get("style")
+        if not style:
+            return {}
+        rules = CSSParser(style).body()
+        return rules
+    
+    def set_style(self, handle, attribute, value):
+        elt = self.handle_to_node[handle]
+        if not isinstance(elt, Element): return
+        rules = self.get_style(handle)
+        rules[attribute] = value
+        cssText = ""
+        for attr in rules:
+            cssText += "{}: {};".format(attr, rules[attr])
+        elt.attributes["style"] = cssText
+        # only call render if document is already fully loaded
+        if self.tab.document:
+            self.tab.render()
+
 
 class Tab:
     def __init__(self, browser):

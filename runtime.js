@@ -69,6 +69,13 @@ Object.defineProperty(Node.prototype, 'children', {
   }
 })
 
+Object.defineProperty(Node.prototype, 'style', {
+  get: function() {
+    styles = call_python("getStyle", this.handle);
+    return new CSSStyleDeclaration(this, styles)
+  }
+})
+
 function CanvasRenderingContext2D(node) { 
   this.node = node;
   this.fillStyle = "black";
@@ -81,6 +88,29 @@ CanvasRenderingContext2D.prototype.fillRect = function(x, y, w, h) {
 CanvasRenderingContext2D.prototype.fillText = function(text, x, y) {
   return call_python("canvas.fillText", this.node.handle, text, x, y, this.fillStyle);
 }
+
+function CSSStyleDeclaration(node, styles) {
+  this.node = node;
+  this.styles = styles;
+}
+
+Object.defineProperty(CSSStyleDeclaration.prototype, 'backgroundColor', {
+  get: function() {
+    return this.styles["background-color"];
+  },
+  set: function(value) {
+    call_python("setStyle", this.node.handle, "background-color", value)
+  }
+})
+
+Object.defineProperty(CSSStyleDeclaration.prototype, 'fontSize', {
+  get: function() {
+    return this.styles["font-size"];
+  },
+  set: function(value) {
+    call_python("setStyle", this.node.handle, "font-size", value)
+  }
+})
 
 function Event(type) {
   this.type = type

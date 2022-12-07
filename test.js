@@ -14,8 +14,12 @@ for (var i = 0; i < inputs.length; i++) {
 }
 
 buttonwithonclick.addEventListener("click", function(e) {
-  // e.preventDefault()
-  console.log("button clicked")
+  e.preventDefault()
+  console.log("button clicked");
+  color = paragraph.style.backgroundColor
+  paragraph.style.backgroundColor = color == "yellow" ? "white" : "yellow";
+  paragraph.style.fontSize = color == "yellow" ? "100%" : "150%";
+  console.log(paragraph.style.backgroundColor)
 })
 
 inner.addEventListener("click", function(e) {
