@@ -1,3 +1,5 @@
+from parser import Element
+
 def resolve_url(url, current):
     if "://" in url:
         return url
@@ -20,3 +22,21 @@ def tree_to_list(tree, list):
     for child in tree.children:
         tree_to_list(child, list)
     return list
+
+def node_tree_to_html(node, include_node = True):
+    s = ""
+    if isinstance(node, Element):
+        if include_node:
+            s += "<{}".format(node.tag)
+            if node.attributes:
+                for attr in node.attributes:
+                    s += " "
+                    s += "{}=\"{}\"".format(attr, node.attributes[attr])
+            s += ">"
+        for child in node.children:
+            s += node_tree_to_html(child)
+        if include_node:
+            s += "</{}>".format(node.tag)
+    else:
+        s += node.text
+    return s

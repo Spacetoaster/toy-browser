@@ -1,5 +1,5 @@
 import sys
-from helpers import resolve_url, tree_to_list
+from helpers import resolve_url, tree_to_list, node_tree_to_html
 from layout.inline_layout import get_font, visited_urls, InputLayout
 from layout.canvas_layout import CanvasLayout, add_draw_cmd
 from request import request
@@ -33,6 +33,8 @@ class JSContext:
         self.interp.export_function("querySelectorAll", self.querySelectorAll)
         self.interp.export_function("getAttribute", self.getAttribute)
         self.interp.export_function("innerHTML_set", self.innerHTML_set)
+        self.interp.export_function("innerHTML_get", self.innerHTML_get)
+        self.interp.export_function("outerHTML_get", self.outerHTML_get)
         self.interp.export_function("children", self.children)
         self.interp.export_function("createElement", self.create_element)
         self.interp.export_function("appendChild", self.append_child)
@@ -104,6 +106,16 @@ class JSContext:
             child.parent = elt
             self.add_global_vars_for_tree(child)
         self.tab.render()
+    
+    def innerHTML_get(self, handle):
+        elt = self.handle_to_node[handle]
+        out = node_tree_to_html(elt, False)
+        return out
+
+    def outerHTML_get(self, handle):
+        elt = self.handle_to_node[handle]
+        out = node_tree_to_html(elt, True)
+        return out
 
     def children(self, handle):
         elt = self.handle_to_node[handle]

@@ -15,11 +15,18 @@ for (var i = 0; i < inputs.length; i++) {
 
 buttonwithonclick.addEventListener("click", function(e) {
   e.preventDefault()
-  console.log("button clicked");
-  color = paragraph.style.backgroundColor
-  paragraph.style.backgroundColor = color == "yellow" ? "white" : "yellow";
-  paragraph.style.fontSize = color == "yellow" ? "100%" : "150%";
-  console.log(paragraph.style.backgroundColor)
+  // console.log("button clicked");
+  // color = paragraph.style.backgroundColor
+  // paragraph.style.backgroundColor = color == "yellow" ? "white" : "yellow";
+  // paragraph.style.fontSize = color == "yellow" ? "100%" : "150%";
+
+  paragraph.innerHTML = '<span id=foo>Chris was here</span>';
+  paragraph.id = 'bar';
+  // Prints "<span id=bar>Chris was here</span>":
+  console.log(paragraph.innerHTML);
+  console.log(paragraph.outerHTML);
+  // console.log(paragraph.style.backgroundColor)
+  // console.log(paragraph.innerHTML)
 })
 
 inner.addEventListener("click", function(e) {
