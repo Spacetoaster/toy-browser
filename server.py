@@ -1,22 +1,23 @@
 import socket
 import urllib.parse
+import random
 
 TOPICS = { "browsers": ["Pavel was here"] }
 
-def do_request(method, url, headers, body):
+def do_request(session, method, url, headers, body):
     if method == "POST" and url == "/add_topic":
         params = form_decode(body)
-        return "200 OK", add_topic(params)
+        return "200 OK", add_topic(session, params)
     if method == "POST" and "/add" in url:
         topic = url[1:].split("/", 1)[0]
         params = form_decode(body)
-        return "200 OK", add_entry(params, topic)
+        return "200 OK", add_entry(session, params, topic)
     elif method == "GET" and "/add?" in url:
         query_data = url.split("?", 1)[1]
         query_data = form_decode(query_data)
-        return "200 OK", add_entry(query_data)
+        return "200 OK", add_entry(session, query_data)
     if method == "GET" and url == "/":
-        return "200 OK", list_topics()
+        return "200 OK", list_topics(session)
     elif method == "GET" and url == "/comment.js":
         with open("comment.js") as f:
             return "200 OK", f.read()
@@ -26,13 +27,13 @@ def do_request(method, url, headers, body):
     elif method == "GET" and url.startswith("/"):
         topic = url[1:]
         if topic in TOPICS:
-            return "200 OK", show_comments(topic)
+            return "200 OK", show_comments(session, topic)
         else:
             return "404 Not Found", not_found(url, method)
     else:
         return "404 Not Found", not_found(url, method)
 
-def show_comments(topic):
+def show_comments(session, topic):
     action = "'/{}/add'".format(topic)
     out = "<!doctype html>"
     out += "<link rel=stylesheet href=/comment.css></link>"
@@ -50,7 +51,7 @@ def show_comments(topic):
     out += "<a href='/'>back to topics</a>"
     return out
 
-def list_topics():
+def list_topics(session):
     out = "<!doctype html>"
     out += "<h1>List of topics</h1>"
     for topic in TOPICS:
@@ -70,15 +71,15 @@ def form_decode(body):
         params[name] = value
     return params
 
-def add_entry(params, topic):
+def add_entry(session, params, topic):
     if 'guest' in params and len(params['guest']) <= 100:
         TOPICS[topic].append(params['guest'])
-    return show_comments(topic)
+    return show_comments(session, topic)
 
-def add_topic(params):
+def add_topic(session, params):
     if 'topic' in params:
         TOPICS[params['topic']] = []
-        return show_comments(params['topic'])
+        return show_comments(session, params['topic'])
     else:
         return list_topics()
 
@@ -97,6 +98,8 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 s.bind(('', 8000))
 s.listen()
 
+SESSIONS = {}
+
 def handle_connection(conx):
     req = conx.makefile("b")
     reqline = req.readline().decode('utf8')
@@ -114,10 +117,18 @@ def handle_connection(conx):
         body = req.read(length).decode('utf8')
     else:
         body = None
-    status, body = do_request(method, url, headers, body)
+    if "cookie" in headers:
+        token = headers["cookie"][len("token="):]
+    else:
+        token = str(random.random())[2:]
+    session = SESSIONS.setdefault(token, {})
+    status, body = do_request(session, method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
     # response += "Cache-Control: max-age=10000\r\n"
+    if "cookie" not in headers:
+        template = "Set-Cookie: token={}\r\n"
+        response += template.format(token)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close()
