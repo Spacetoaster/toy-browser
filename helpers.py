@@ -40,3 +40,7 @@ def node_tree_to_html(node, include_node = True):
     else:
         s += node.text
     return s
+
+def url_origin(url):
+    scheme_colon, _, host, _ = url.split("/", 3)
+    return scheme_colon + "//" + host

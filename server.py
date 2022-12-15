@@ -1,17 +1,29 @@
 import socket
 import urllib.parse
 import random
+import html
 
-TOPICS = { "browsers": ["Pavel was here"] }
+TOPICS = { "browsers": [
+    ("Pavel was here", "cerealkiller"),
+    ("HACK THE PLANET!!!", "crashoverride"),
+] }
+LOGINS = {
+    "crashoverride": "0cool",
+    "cerealkiller": "emmanuel",
+    "": "",
+}
 
 def do_request(session, method, url, headers, body):
     if method == "POST" and url == "/add_topic":
         params = form_decode(body)
         return "200 OK", add_topic(session, params)
-    if method == "POST" and "/add" in url:
+    elif method == "POST" and "/add" in url:
         topic = url[1:].split("/", 1)[0]
         params = form_decode(body)
         return "200 OK", add_entry(session, params, topic)
+    elif method == "POST" and url == "/":
+        params = form_decode(body)
+        return do_login(session, params)
     elif method == "GET" and "/add?" in url:
         query_data = url.split("?", 1)[1]
         query_data = form_decode(query_data)
@@ -24,6 +36,8 @@ def do_request(session, method, url, headers, body):
     elif method == "GET" and url == "/comment.css":
         with open("comment.css") as f:
             return "200 OK", f.read()
+    elif method == "GET" and url == "/login":
+        return "200 OK", login_form(session)
     elif method == "GET" and url.startswith("/"):
         topic = url[1:]
         if topic in TOPICS:
@@ -33,20 +47,39 @@ def do_request(session, method, url, headers, body):
     else:
         return "404 Not Found", not_found(url, method)
 
+def do_login(session, params):
+    if "nonce" not in session or "nonce" not in params: return
+    if session["nonce"] != params["nonce"]: return
+    username = params.get("username")
+    password = params.get("password")
+    if username in LOGINS and LOGINS[username] == password:
+        session["user"] = username
+        return "200 OK", list_topics(session)
+    else:
+        out = "<!doctype html>"
+        out += "<h1>Invalid password for {}</h1>".format(username)
+        return "401 Unauthorized", out
+
 def show_comments(session, topic):
     action = "'/{}/add'".format(topic)
     out = "<!doctype html>"
     out += "<link rel=stylesheet href=/comment.css></link>"
+    out += "<script src=https://example.com/evil.js></script>"
     out += "<h1>Posts about {}</h1>".format(topic)
-    for entry in TOPICS[topic]:
-        out += "<p>" + entry + "</p>"
-    out += "<form action={} method=post>".format(action)
-    out +=   "<p><input name=guest></p>"
-    # out +=   "<p><input name=text></p>"
-    # out +=   "<p><input name=bla value=cheekycheckbox type=checkbox> Checkbox label</p>"
-    out +=   "<p><button>Post</button></p>"
-    out += "<label></label>"
-    out += "</form>"
+    for entry, who in TOPICS[topic]:
+        out += "<p>" + html.escape(entry) + "\n"
+        out += "<i>by " + html.escape(who) + "</i></p>"
+    if "user" in session:
+        nonce = str(random.random())[2:]
+        session["nonce"] = nonce
+        out += "<h1>Hello, " + session["user"] + "</h1>"
+        out += "<form action={} method=post>".format(action)
+        out +=   "<p><input name=guest></p>"
+        out +=   "<input name=nonce type=hidden value=" + nonce + ">"
+        out +=   "<p><button>Post</button></p>"
+        out += "</form>"
+    else:
+        out += "<a href=/login>Sign in to write in the guest book</a><br>"
     out += "<script src=/comment.js></script>"
     out += "<a href='/'>back to topics</a>"
     return out
@@ -55,11 +88,18 @@ def list_topics(session):
     out = "<!doctype html>"
     out += "<h1>List of topics</h1>"
     for topic in TOPICS:
-        out += "<p><a href='/{}'>".format(topic) + topic + "</a></p>"
-    out += "<form action=add_topic method=post>"
-    out +=   "<p><input name=topic></p>"
-    out +=   "<p><button>New Topic</button></p>"
-    out += "</form>"
+        out += "<p><a href='/{}'>".format(topic) + html.escape(topic) + "</a></p>"
+    if "user" in session:
+        nonce = str(random.random())[2:]
+        session["nonce"] = nonce
+        out += "<form action=add_topic method=post>"
+        out +=   "<p><input name=topic></p>"
+        out +=   "<p><button>New Topic</button></p>"
+        out +=   "<input name=nonce type=hidden value=" + nonce + ">"
+        out += "</form>"
+    else:
+        out += "<a href=/login>Sign in to add a topic</a><br>"
+    out += "<a href=\"http://localhost:4000/\">test</a>"
     return out
 
 def form_decode(body):
@@ -72,11 +112,16 @@ def form_decode(body):
     return params
 
 def add_entry(session, params, topic):
+    if "nonce" not in session or "nonce" not in params: return
+    if session["nonce"] != params["nonce"]: return
+    if "user" not in session: return
     if 'guest' in params and len(params['guest']) <= 100:
-        TOPICS[topic].append(params['guest'])
+        TOPICS[topic].append((params['guest'], session["user"]))
     return show_comments(session, topic)
 
 def add_topic(session, params):
+    if "nonce" not in session or "nonce" not in params: return
+    if session["nonce"] != params["nonce"]: return
     if 'topic' in params:
         TOPICS[params['topic']] = []
         return show_comments(session, params['topic'])
@@ -87,6 +132,18 @@ def not_found(url, method):
     out = "<!doctyle html>"
     out += "<h1>{} {} not found!</h1>".format(method, url)
     return out
+
+def login_form(session):
+    nonce = str(random.random())[2:]
+    session["nonce"] = nonce
+    body = "<!doctype html>"
+    body += "<form action=/ method=post>"
+    body += "<p>Username: <input name=username></p>"
+    body += "<p>Password: <input name=password type=password></p>"
+    body += "<input name=nonce type=hidden value=" + nonce + ">"
+    body += "<p><button>Log in</button></p>"
+    body += "</form>"
+    return body
 
 s = socket.socket(
     family=socket.AF_INET,
@@ -106,6 +163,7 @@ def handle_connection(conx):
     method, url, version = reqline.split(" ", 2)
     print("handling request {} {} {}".format(method, url, version))
     assert method in ["GET", "POST"]
+    csp = "default-src http://localhost:8000"
     headers = {}
     while True:
         line = req.readline().decode('utf8')
@@ -125,9 +183,10 @@ def handle_connection(conx):
     status, body = do_request(session, method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
+    response += "Content-Security-Policy: {}\r\n".format(csp)
     # response += "Cache-Control: max-age=10000\r\n"
     if "cookie" not in headers:
-        template = "Set-Cookie: token={}\r\n"
+        template = "Set-Cookie: token={}; SameSite=Lax\r\n"
         response += template.format(token)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))

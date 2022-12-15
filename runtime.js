@@ -134,3 +134,15 @@ Event.prototype.preventDefault = function() {
 Event.prototype.stopPropagation = function() {
   this.stop_propagation = true;
 }
+
+function XMLHttpRequest() {}
+
+XMLHttpRequest.prototype.open = function (method, url, is_async) {
+  if (is_async) throw Error("Asynchronous XHR is not supported");
+  this.method = method;
+  this.url = url;
+}
+
+XMLHttpRequest.prototype.send = function(body) {
+  this.responseText = call_python("XMLHttpRequest_send", this.method, this.url, body);
+}

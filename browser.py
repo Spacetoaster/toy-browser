@@ -1,5 +1,5 @@
 import sys
-from helpers import resolve_url, tree_to_list
+from helpers import resolve_url, tree_to_list, url_origin
 from layout.inline_layout import get_font, visited_urls, InputLayout
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
@@ -40,24 +40,32 @@ class Tab:
     def load(self, url, back_or_forward=False, req_body=None):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
         self.history.append((url, req_body))
-        self.url = url
         if only_fragment_changed:
             self.scroll_to_fragment(url)
         else:
             headers, body, view_source = handle_special_pages(url, self.browser)
             if not body:
-                headers, body, view_source = request(url, payload=req_body)
+                headers, body, view_source = request(url, self.url, payload=req_body)
             if view_source:
                 self.nodes = ViewSourceParser(body).parse()
             else:
                 self.nodes = HTMLParser(body).parse()
             # print_tree(self.nodes)
+            self.allowed_origins = None
+            if "content-security-policy" in headers:
+                csp = headers["content-security-policy"].split()
+                if len(csp) > 0 and csp[0] == "default-src":
+                    self.allowed_origins = csp[1:]
             scripts = [node.attributes["src"] for node in tree_to_list(self.nodes, [])
                        if isinstance(node, Element) and node.tag == "script"
                        and "src" in node.attributes]
             self.js = JSContext(self)
             for script in scripts:
-                header, body, _ = request(resolve_url(script, url))
+                script_url = resolve_url(script, url)
+                if not self.allowed_request(script_url):
+                    print("Blocked script", script, "due to CSP")
+                    continue
+                header, body, _ = request(script_url, url)
                 try:
                     self.js.run(body)
                 except dukpy.JSRuntimeError as e:
@@ -68,7 +76,11 @@ class Tab:
                     and node.attributes.get("rel") == "stylesheet"]
             for link in links:
                 try:
-                    header, body, _ = request(resolve_url(link, url))
+                    link_url = resolve_url(link, url)
+                    if not self.allowed_request(link_url):
+                        print("Blocked link", link_url, "due to CSP")
+                        continue
+                    header, body, _ = request(link_url, url)
                     print("downloaded stylesheet {}".format(link))
                 except:
                     print("error downloading stylesheet {}".format(link))
@@ -83,6 +95,7 @@ class Tab:
             self.scroll_to_fragment(url)
         if not back_or_forward:
             self.future = []
+        self.url = url
     
     def render(self):
         style(self.nodes, sorted(self.rules, key=cascade_priority))
@@ -262,6 +275,9 @@ class Tab:
         self.document.layout(width)
         self.display_list = []
         self.document.paint(self.display_list)
+    
+    def allowed_request(self, url):
+        return self.allowed_origins == None or url_origin(url) in self.allowed_origins
 
 class Browser:
     def __init__(self):

@@ -5,7 +5,9 @@ import cache
 
 MAX_REDIRECTS = 10
 
-def build_request(host, path, payload = None):
+COOKIE_JAR = {}
+
+def build_request(host, path, top_level_url, payload = None):
     method = "POST" if payload else "GET"
     request_headers = {
         "HOST": host,
@@ -16,13 +18,23 @@ def build_request(host, path, payload = None):
     body = "{} {} HTTP/1.1\r\n".format(method, path)
     for header, value in request_headers.items():
         body += "{}: {}\r\n".format(header, value)
+    if host in COOKIE_JAR:
+        cookie, params = COOKIE_JAR[host]
+        allow_cookie = True
+        if top_level_url and params.get("samesite", "none") == "lax":
+            _, _, top_level_host, _ = top_level_url.split("/", 3)
+            if ":" in top_level_host:
+                top_level_host, _ = top_level_host.split(":", 1)
+            allow_cookie = (host == top_level_host or method == "GET")
+        if allow_cookie:
+            body += "Cookie: {}\r\n".format(cookie)
     if payload:
         length = len(payload.encode("utf8"))
         body += "Content-Length: {}\r\n".format(length)
     body += "\r\n" + (payload if payload else "")
     return body.encode("utf8")
 
-def request_http(scheme, url, num_redirects = 0, payload = None):
+def request_http(scheme, url, top_level_url, num_redirects = 0, payload = None):
     port = 80 if scheme == "http" else 443
     host, path = url.split("/", 1)
     if ":" in host:
@@ -40,7 +52,7 @@ def request_http(scheme, url, num_redirects = 0, payload = None):
         s = ctx.wrap_socket(s, server_hostname=host)
 
     s.connect((host, port))
-    request = build_request(host, path, payload)
+    request = build_request(host, path, top_level_url, payload)
     s.send(request)
 
     response = s.makefile("rb")
@@ -82,21 +94,31 @@ def request_http(scheme, url, num_redirects = 0, payload = None):
 
     s.close()
     cache.try_to_cache("{}://{}".format(scheme, url), headers, body)
+    if "set-cookie" in headers:
+        params = {}
+        if ";" in headers["set-cookie"]:
+            cookie, rest = headers["set-cookie"].split(";", 1)
+            for param_pair in rest.split(";"):
+                name, value = param_pair.strip().split("=", 1)
+                params[name.lower()] = value.lower()
+        else:
+            cookie = headers["set-cookie"]
+        COOKIE_JAR[host] = (cookie, params)
 
     return headers, body
 
 def handle_redirect(scheme, url, location, num_redirects):
     if location.startswith("/"):
-        return request_http(scheme, url + location, num_redirects)
+        return request_http(scheme, url + location, url + location, num_redirects)
     else:
-        return request(location, num_redirects)
+        return request(location, location, num_redirects)
 
 def request_file(url):
     file = open(url, "r")
     body = file.read()
-    return None, body
+    return {}, body
 
-def request(url, num_redirects = 0, payload=None):
+def request(url, top_level_url, num_redirects = 0, payload=None):
     headers, body = None, None
     view_source = False
     if url.startswith("view-source:"):
@@ -114,7 +136,7 @@ def request(url, num_redirects = 0, payload=None):
     assert scheme in ["http", "https", "file",
                       "data"], "Unknown scheme {}".format(scheme)
     if scheme in ["http", "https"]:
-        headers, body = request_http(scheme, url, num_redirects, payload)
+        headers, body = request_http(scheme, url, top_level_url, num_redirects, payload)
     elif scheme == "file":
         headers, body = request_file(url)
     elif scheme == "data":

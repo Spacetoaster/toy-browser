@@ -3,7 +3,8 @@ from layout.inline_layout import get_font
 from layout.drawing import DrawRect, DrawText
 from parser import HTMLParser, Element
 from style import CSSParser
-from helpers import tree_to_list, node_tree_to_html
+from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin
+from request import request
 import dukpy
 
 EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
@@ -27,6 +28,7 @@ class JSContext:
         self.interp.export_function("canvas.fillText", self.fill_text)
         self.interp.export_function("getStyle", self.get_style)
         self.interp.export_function("setStyle", self.set_style)
+        self.interp.export_function("XMLHttpRequest_send", self.XMLHttpRequest_send)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -196,3 +198,13 @@ class JSContext:
         # only call render if document is already fully loaded
         if self.tab.document:
             self.tab.render()
+    
+    def XMLHttpRequest_send(self, method, url, body):
+        full_url = resolve_url(url, self.tab.url)
+        if not self.tab.allowed_request(full_url):
+            raise Exception("Cross-origin XHR blocked by CSP")
+        if url_origin(full_url) != url_origin(self.tab.url):
+            raise Exception("Cross-origin XHR request not allowed")
+        headers, out = request(full_url, self.tab.url, body)
+        return out
+
