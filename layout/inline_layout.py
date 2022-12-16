@@ -25,6 +25,7 @@ class InputLayout:
         self.parent = parent
         self.previous = previous
         self.is_checkbox = self.node.tag == "input" and self.node.attributes.get("type", "") == "checkbox"
+        self.is_password = self.node.tag == "input" and self.node.attributes.get("type", "") == "password"
     
     def layout(self):
         weight = self.node.style["font-weight"]
@@ -54,7 +55,10 @@ class InputLayout:
             display_list.append(rect)
         
         if self.node.tag == "input":
-            text = self.node.attributes.get("value", "")
+            if self.is_password:
+                text = "*" * len(self.node.attributes.get("value", ""))
+            else:
+                text = self.node.attributes.get("value", "")
         elif self.node.tag == "button":
             text = self.node.children[0].text
         
@@ -204,6 +208,8 @@ class InlineLayout:
         return get_font(size, weight, style, family)
 
     def input(self, node):
+        if node.tag == "input" and node.attributes.get("type", "") == "hidden":
+            return
         w = INPUT_WIDTH_PX
         if self.cursor_x + w > self.x + self.width:
             self.new_line()

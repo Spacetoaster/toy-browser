@@ -99,7 +99,6 @@ def list_topics(session):
         out += "</form>"
     else:
         out += "<a href=/login>Sign in to add a topic</a><br>"
-    out += "<a href=\"http://localhost:4000/\">test</a>"
     return out
 
 def form_decode(body):
