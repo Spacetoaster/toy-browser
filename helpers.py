@@ -44,3 +44,18 @@ def node_tree_to_html(node, include_node = True):
 def url_origin(url):
     scheme_colon, _, host, _ = url.split("/", 3)
     return scheme_colon + "//" + host
+
+def parse_cookie_string(cookie_str):
+    params = {}
+    if ";" in cookie_str:
+        cookie, rest = cookie_str.split(";", 1)
+        for param_pair in rest.split(";"):
+            param_pair = param_pair.strip()
+            if param_pair == "HttpOnly":
+                params[param_pair] = True
+                continue
+            name, value = param_pair.split("=", 1)
+            params[name.lower()] = value.lower()
+    else:
+        cookie = cookie_str
+    return (cookie, params)

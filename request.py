@@ -2,6 +2,7 @@ import socket
 import ssl
 import gzip
 import cache
+from helpers import parse_cookie_string
 
 MAX_REDIRECTS = 10
 
@@ -98,15 +99,7 @@ def request_http(scheme, url, top_level_url, num_redirects = 0, payload = None):
     s.close()
     cache.try_to_cache("{}://{}".format(scheme, url), headers, body)
     if "set-cookie" in headers:
-        params = {}
-        if ";" in headers["set-cookie"]:
-            cookie, rest = headers["set-cookie"].split(";", 1)
-            for param_pair in rest.split(";"):
-                name, value = param_pair.strip().split("=", 1)
-                params[name.lower()] = value.lower()
-        else:
-            cookie = headers["set-cookie"]
-        COOKIE_JAR[host] = (cookie, params)
+        COOKIE_JAR[host] = parse_cookie_string(headers["set-cookie"])
 
     return headers, body
 

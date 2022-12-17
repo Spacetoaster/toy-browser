@@ -3,8 +3,8 @@ from layout.inline_layout import get_font
 from layout.drawing import DrawRect, DrawText
 from parser import HTMLParser, Element
 from style import CSSParser
-from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin
-from request import request
+from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin, parse_cookie_string
+from request import request, COOKIE_JAR
 import dukpy
 
 EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
@@ -29,6 +29,8 @@ class JSContext:
         self.interp.export_function("getStyle", self.get_style)
         self.interp.export_function("setStyle", self.set_style)
         self.interp.export_function("XMLHttpRequest_send", self.XMLHttpRequest_send)
+        self.interp.export_function("get_cookie", self.get_cookie)
+        self.interp.export_function("set_cookie", self.set_cookie)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -208,3 +210,26 @@ class JSContext:
         headers, out = request(full_url, self.tab.url, body)
         return out
 
+    def get_cookie(self):
+        _, _, host, _ = self.tab.url.split("/", 3)
+        if ":" in host:
+                host, _ = host.split(":", 1)
+        if host in COOKIE_JAR:
+            cookie, params = COOKIE_JAR[host]
+            if "HttpOnly" in params:
+                return ''
+            return cookie
+        else:
+            return ''
+
+    def set_cookie(self, new_cookie):
+        _, _, host, _ = self.tab.url.split("/", 3)
+        if ":" in host:
+                host, _ = host.split(":", 1)
+        if host in COOKIE_JAR:
+            _, params = COOKIE_JAR[host]
+            if "HttpOnly" in params:
+                return
+        COOKIE_JAR[host] = parse_cookie_string(new_cookie)
+            
+        

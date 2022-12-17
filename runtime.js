@@ -9,8 +9,17 @@ document = {
   createElement: function(tagName) {
     var handle = call_python("createElement", tagName)
     return new Node(handle)
-  }
+  },
 }
+
+Object.defineProperty(document, "cookie", {
+  get: function() {
+    return call_python("get_cookie")
+  },
+  set: function(cookie) {
+    return call_python("set_cookie", cookie)
+  }
+})
 
 LISTENERS = {}
 

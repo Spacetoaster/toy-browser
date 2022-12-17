@@ -185,7 +185,7 @@ def handle_connection(conx):
     response += "Content-Security-Policy: {}\r\n".format(csp)
     # response += "Cache-Control: max-age=10000\r\n"
     if "cookie" not in headers:
-        template = "Set-Cookie: token={}; SameSite=Lax\r\n"
+        template = "Set-Cookie: token={}; SameSite=Lax; HttpOnly\r\n"
         response += template.format(token)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
