@@ -36,6 +36,7 @@ class Tab:
         self.nodes = None
         self.focus = None
         self.document = None
+        self.is_secure_connection = False
     
     def load(self, url, back_or_forward=False, req_body=None):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
@@ -50,6 +51,7 @@ class Tab:
                 self.nodes = ViewSourceParser(body).parse()
             else:
                 self.nodes = HTMLParser(body).parse()
+            self.is_secure_connection = "https" in url and not body.startswith("SSL Error:")
             # print_tree(self.nodes)
             self.allowed_origins = None
             if "content-security-policy" in headers:
@@ -338,6 +340,8 @@ class Browser:
         else:
             url = self.tabs[self.active_tab].url
             self.canvas.create_text(85, 55, anchor="nw", text=url, font=buttonfont, fill="black")
+            if self.tabs[self.active_tab].is_secure_connection:
+                self.canvas.create_text(self.width - 80, 70, text="\N{lock}", font=buttonfont, fill="black")
         # draw back button
         back_color = "black" if len(self.tabs[self.active_tab].history) > 1 else "lightgray"
         self.canvas.create_rectangle(10, 50, 35, 90, outline="black", width=1)

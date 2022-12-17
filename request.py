@@ -51,7 +51,10 @@ def request_http(scheme, url, top_level_url, num_redirects = 0, payload = None):
         ctx = ssl.create_default_context()
         s = ctx.wrap_socket(s, server_hostname=host)
 
-    s.connect((host, port))
+    try:
+        s.connect((host, port))
+    except ssl.SSLError:
+        return {}, "SSL Error: preventing connection to {}".format(host)
     request = build_request(host, path, top_level_url, payload)
     s.send(request)
 
