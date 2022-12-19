@@ -1,4 +1,6 @@
 from parser import Element
+import werkzeug.http
+from datetime import datetime, timezone
 
 def resolve_url(url, current):
     if "://" in url:
@@ -55,7 +57,20 @@ def parse_cookie_string(cookie_str):
                 params[param_pair] = True
                 continue
             name, value = param_pair.split("=", 1)
-            params[name.lower()] = value.lower()
+            if name == "Expires":
+                value = datetime_from_http_date(value)
+            else:
+                value = value.lower()
+            params[name.lower()] = value
     else:
         cookie = cookie_str
     return (cookie, params)
+
+def datetime_from_http_date(http_date_str):
+    return werkzeug.http.parse_date(http_date_str)
+
+def datetime_to_http_date(datetime_obj):
+    return werkzeug.http.http_date(datetime_obj)
+
+def is_cookie_expired(expires_date):
+    return expires_date < datetime.now(timezone.utc)

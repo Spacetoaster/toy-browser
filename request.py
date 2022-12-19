@@ -2,7 +2,7 @@ import socket
 import ssl
 import gzip
 import cache
-from helpers import parse_cookie_string
+from helpers import parse_cookie_string, is_cookie_expired
 
 MAX_REDIRECTS = 10
 
@@ -27,6 +27,9 @@ def build_request(host, path, top_level_url, payload = None):
             if ":" in top_level_host:
                 top_level_host, _ = top_level_host.split(":", 1)
             allow_cookie = (host == top_level_host or method == "GET")
+        if "expires" in params and is_cookie_expired(params["expires"]):
+            allow_cookie = False
+            del COOKIE_JAR[host]
         if allow_cookie:
             body += "Cookie: {}\r\n".format(cookie)
     if payload:

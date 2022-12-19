@@ -3,7 +3,7 @@ from layout.inline_layout import get_font
 from layout.drawing import DrawRect, DrawText
 from parser import HTMLParser, Element
 from style import CSSParser
-from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin, parse_cookie_string
+from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin, parse_cookie_string, is_cookie_expired
 from request import request, COOKIE_JAR
 import dukpy
 
@@ -217,6 +217,9 @@ class JSContext:
         if host in COOKIE_JAR:
             cookie, params = COOKIE_JAR[host]
             if "HttpOnly" in params:
+                return ''
+            if "expires" in params and is_cookie_expired(params["expires"]):
+                del COOKIE_JAR[host]
                 return ''
             return cookie
         else:

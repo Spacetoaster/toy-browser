@@ -2,6 +2,8 @@ import socket
 import urllib.parse
 import random
 import html
+from datetime import datetime, timedelta, timezone
+from helpers import datetime_to_http_date, is_cookie_expired
 
 TOPICS = { "browsers": [
     ("Pavel was here", "cerealkiller"),
@@ -33,11 +35,16 @@ def do_request(session, method, url, headers, body):
     elif method == "GET" and url == "/comment.js":
         with open("comment.js") as f:
             return "200 OK", f.read()
+    elif method == "GET" and url == "/cookie.js":
+        with open("cookie.js") as f:
+            return "200 OK", f.read()
     elif method == "GET" and url == "/comment.css":
         with open("comment.css") as f:
             return "200 OK", f.read()
     elif method == "GET" and url == "/login":
         return "200 OK", login_form(session)
+    elif method == "GET" and url == "/test-cookie":
+        return "200 OK", test_cookie(session)
     elif method == "GET" and url.startswith("/"):
         topic = url[1:]
         if topic in TOPICS:
@@ -46,6 +53,13 @@ def do_request(session, method, url, headers, body):
             return "404 Not Found", not_found(url, method)
     else:
         return "404 Not Found", not_found(url, method)
+
+def test_cookie(session):
+    out = "<!doctype html>"
+    out += "<h1>Test Cookie expiration (console)</h1>"
+    out += "<button id=\"btn\">get cookie</button>"
+    out += "<script src=/cookie.js></script>"
+    return out
 
 def do_login(session, params):
     if "nonce" not in session or "nonce" not in params: return
@@ -156,11 +170,32 @@ s.listen()
 
 SESSIONS = {}
 
+def cleanup_sessions():
+    delete_tokens = []
+    out = "tokens before cleanup:"
+    for token in SESSIONS:
+        expires = SESSIONS[token]["expires"]
+        now = datetime.now(timezone.utc)
+        if expires < now:
+            session_age = now - expires
+        else:
+            session_age = expires - now
+        out += " {} {}".format(token, session_age.seconds)
+    print(out)
+    for token in SESSIONS:
+        session = SESSIONS[token]
+        if "expires" in session and is_cookie_expired(session["expires"]):
+            print("deleting session with token {}".format(token))
+            delete_tokens.append(token)
+    print("cleanup_sessions: deleting {} of {} sessions".format(len(delete_tokens), len(SESSIONS)))
+    for token in delete_tokens:
+        del SESSIONS[token]
+
 def handle_connection(conx):
     req = conx.makefile("b")
     reqline = req.readline().decode('utf8')
     method, url, version = reqline.split(" ", 2)
-    print("handling request {} {} {}".format(method, url, version))
+    # print("handling request {} {} {}".format(method, url, version))
     assert method in ["GET", "POST"]
     csp = "default-src http://localhost:8000"
     headers = {}
@@ -178,22 +213,26 @@ def handle_connection(conx):
         token = headers["cookie"][len("token="):]
     else:
         token = str(random.random())[2:]
-    session = SESSIONS.setdefault(token, {})
+    cleanup_sessions()
+    session = SESSIONS.setdefault(token, { "expires": datetime.now(timezone.utc) + timedelta(seconds=10) })
     status, body = do_request(session, method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
     response += "Content-Security-Policy: {}\r\n".format(csp)
     # response += "Cache-Control: max-age=10000\r\n"
     if "cookie" not in headers:
-        template = "Set-Cookie: token={}; SameSite=Lax; HttpOnly\r\n"
+        print("sending new cookie")
+        template = "Set-Cookie: token={}; SameSite=Lax"
+        template += "; Expires={}".format(datetime_to_http_date(session["expires"]))
+        template += "\r\n"
         response += template.format(token)
     response += "\r\n" + body
     conx.send(response.encode('utf8'))
     conx.close()
-    print("closed connection {}".format(conx))
+    # print("closed connection {}".format(conx))
 
 while True:
-    print("listing for new request")
+    # print("listing for new request")
     conx, addr = s.accept()
-    print("got new request")
+    # print("got new request")
     handle_connection(conx)

@@ -15,7 +15,3 @@ form = document.querySelectorAll("form")[0];
 form.addEventListener("submit", function(e) {
   if (!allow_submit) e.preventDefault();
 })
-
-console.log("cookie (before set): " + document.cookie)
-document.cookie = "token=42; SameSite=Lax"
-console.log("cookie (after set): " + document.cookie)
