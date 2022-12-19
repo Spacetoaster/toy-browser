@@ -205,9 +205,15 @@ class JSContext:
         full_url = resolve_url(url, self.tab.url)
         if not self.tab.allowed_request(full_url):
             raise Exception("Cross-origin XHR blocked by CSP")
+        headers, out, _ = request(full_url, self.tab.url, body)
         if url_origin(full_url) != url_origin(self.tab.url):
-            raise Exception("Cross-origin XHR request not allowed")
-        headers, out = request(full_url, self.tab.url, body)
+            if method in ["GET", "POST", "HEAD"] and "access-control-allow-origin" in headers:
+                allowed_origins = headers["access-control-allow-origin"].split()
+                origin = url_origin(full_url)
+                if "*" in allowed_origins or origin in allowed_origins:
+                    return out
+            raise Exception("Cross-origin XHR request not allowed, No \
+                'Access-Control-Allow-Origin' headers is present on the requested resource")
         return out
 
     def get_cookie(self):

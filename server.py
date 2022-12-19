@@ -197,7 +197,7 @@ def handle_connection(conx):
     method, url, version = reqline.split(" ", 2)
     # print("handling request {} {} {}".format(method, url, version))
     assert method in ["GET", "POST"]
-    csp = "default-src http://localhost:8000"
+    csp = "default-src http://localhost:8000 https://api.github.com http://example.org"
     headers = {}
     while True:
         line = req.readline().decode('utf8')
@@ -214,7 +214,7 @@ def handle_connection(conx):
     else:
         token = str(random.random())[2:]
     cleanup_sessions()
-    session = SESSIONS.setdefault(token, { "expires": datetime.now(timezone.utc) + timedelta(seconds=10) })
+    session = SESSIONS.setdefault(token, { "expires": datetime.now(timezone.utc) + timedelta(hours=1) })
     status, body = do_request(session, method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
