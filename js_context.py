@@ -205,7 +205,7 @@ class JSContext:
         full_url = resolve_url(url, self.tab.url)
         if not self.tab.allowed_request(full_url):
             raise Exception("Cross-origin XHR blocked by CSP")
-        headers, out, _ = request(full_url, self.tab.url, body)
+        headers, out, _ = request(full_url, self.tab.url, payload=body, referrer_policy=self.tab.referrer_policy)
         if url_origin(full_url) != url_origin(self.tab.url):
             if method in ["GET", "POST", "HEAD"] and "access-control-allow-origin" in headers:
                 allowed_origins = headers["access-control-allow-origin"].split()

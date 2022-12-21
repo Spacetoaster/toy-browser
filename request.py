@@ -2,13 +2,30 @@ import socket
 import ssl
 import gzip
 import cache
-from helpers import parse_cookie_string, is_cookie_expired
+from helpers import parse_cookie_string, is_cookie_expired, url_origin
 
 MAX_REDIRECTS = 10
 
 COOKIE_JAR = {}
 
-def build_request(host, path, top_level_url, payload = None):
+def referrer_header(scheme, host, path, top_level_url, referrer_policy):
+    if not top_level_url:
+        return None
+    if referrer_policy == "strict-origin-when-cross-origin" or referrer_policy == None:
+        top_level_scheme, _, top_level_host, _ = top_level_url.split("/", 3)
+        top_level_scheme, _ = top_level_scheme.split(":", 1)
+        if ":" in top_level_host:
+            top_level_host, _ = top_level_host.split(":", 1)
+        if scheme == top_level_scheme or scheme == "https":
+            if host == top_level_host:
+                return top_level_url
+            else:
+                return top_level_scheme + "://" + top_level_host + "/"
+    elif referrer_policy == "no-referrer":
+        return None
+    return None
+
+def build_request(scheme, host, path, top_level_url, payload=None, referrer_policy=None, send_referrer=True):
     method = "POST" if payload else "GET"
     request_headers = {
         "HOST": host,
@@ -16,6 +33,9 @@ def build_request(host, path, top_level_url, payload = None):
         "User-Agent": "Spacetoaster's Toy Browser",
         "Accept-Encoding": "gzip",
     }
+    referrer = referrer_header(scheme, host, path, top_level_url, referrer_policy)
+    if referrer and send_referrer:
+        request_headers["Referer"] = referrer
     body = "{} {} HTTP/1.1\r\n".format(method, path)
     for header, value in request_headers.items():
         body += "{}: {}\r\n".format(header, value)
@@ -38,7 +58,7 @@ def build_request(host, path, top_level_url, payload = None):
     body += "\r\n" + (payload if payload else "")
     return body.encode("utf8")
 
-def request_http(scheme, url, top_level_url, num_redirects = 0, payload = None):
+def request_http(scheme, url, top_level_url, num_redirects=0, payload=None, referrer_policy=None, send_referrer=True):
     port = 80 if scheme == "http" else 443
     host, path = url.split("/", 1)
     if ":" in host:
@@ -59,7 +79,7 @@ def request_http(scheme, url, top_level_url, num_redirects = 0, payload = None):
         s.connect((host, port))
     except ssl.SSLError:
         return {}, "SSL Error: preventing connection to {}".format(host)
-    request = build_request(host, path, top_level_url, payload)
+    request = build_request(scheme, host, path, top_level_url, payload, referrer_policy, send_referrer)
     s.send(request)
 
     response = s.makefile("rb")
@@ -117,7 +137,7 @@ def request_file(url):
     body = file.read()
     return {}, body
 
-def request(url, top_level_url, num_redirects = 0, payload=None):
+def request(url, top_level_url, num_redirects = 0, payload=None, referrer_policy=None, send_referrer=True):
     headers, body = None, None
     view_source = False
     if url.startswith("view-source:"):
@@ -135,7 +155,7 @@ def request(url, top_level_url, num_redirects = 0, payload=None):
     assert scheme in ["http", "https", "file",
                       "data"], "Unknown scheme {}".format(scheme)
     if scheme in ["http", "https"]:
-        headers, body = request_http(scheme, url, top_level_url, num_redirects, payload)
+        headers, body = request_http(scheme, url, top_level_url, num_redirects, payload, referrer_policy, send_referrer)
     elif scheme == "file":
         headers, body = request_file(url)
     elif scheme == "data":

@@ -37,8 +37,9 @@ class Tab:
         self.focus = None
         self.document = None
         self.is_secure_connection = False
+        self.referrer_policy = None
     
-    def load(self, url, back_or_forward=False, req_body=None):
+    def load(self, url, back_or_forward=False, req_body=None, send_referrer=True):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
         self.history.append((url, req_body))
         if only_fragment_changed:
@@ -46,13 +47,15 @@ class Tab:
         else:
             headers, body, view_source = handle_special_pages(url, self.browser)
             if not body:
-                headers, body, view_source = request(url, self.url, payload=req_body)
+                headers, body, view_source = request(url, self.url, payload=req_body, 
+                    referrer_policy=self.referrer_policy, send_referrer=send_referrer)
             if view_source:
                 self.nodes = ViewSourceParser(body).parse()
             else:
                 self.nodes = HTMLParser(body).parse()
             self.is_secure_connection = "https" in url and not body.startswith("SSL Error:")
             # print_tree(self.nodes)
+            self.referrer_policy = headers["referrer-policy"] if "referrer-policy" in headers else None
             self.allowed_origins = None
             if "content-security-policy" in headers:
                 csp = headers["content-security-policy"].split()
@@ -67,7 +70,7 @@ class Tab:
                 if not self.allowed_request(script_url):
                     print("Blocked script", script, "due to CSP")
                     continue
-                header, body, _ = request(script_url, url)
+                header, body, _ = request(script_url, url, referrer_policy=self.referrer_policy)
                 try:
                     self.js.run(body)
                 except dukpy.JSRuntimeError as e:
@@ -82,7 +85,7 @@ class Tab:
                     if not self.allowed_request(link_url):
                         print("Blocked link", link_url, "due to CSP")
                         continue
-                    header, body, _ = request(link_url, url)
+                    header, body, _ = request(link_url, url, referrer_policy=self.referrer_policy)
                     print("downloaded stylesheet {}".format(link))
                 except:
                     print("error downloading stylesheet {}".format(link))
@@ -108,7 +111,7 @@ class Tab:
     
     def go_back(self):
         if len(self.history) > 1:
-            _, last_body = self.history[-1]
+            _, last_body = self.history[-2]
             if last_body:
                 confirmed = self.confirm_form_resubmission()
                 if not confirmed:
@@ -116,7 +119,7 @@ class Tab:
             forward = self.history.pop()
             self.future.append(forward)
             back_url, back_body = self.history.pop()
-            self.load(back_url, back_or_forward=True, req_body=back_body)
+            self.load(back_url, back_or_forward=True, req_body=back_body, send_referrer=False)
 
     def go_forward(self):
         if len(self.future) > 0:
@@ -126,7 +129,7 @@ class Tab:
                 if not confirmed:
                     return
             next_url, next_body = self.future.pop()
-            self.load(next_url, back_or_forward=True, req_body=next_body)
+            self.load(next_url, back_or_forward=True, req_body=next_body, send_referrer=False)
 
     def confirm_form_resubmission(self):
         return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
@@ -396,7 +399,7 @@ class Browser:
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.active_tab = int((e.x - 40) / 80)
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
-                self.load("https://browser.engineering/")
+                self.load("https://browser.engineering/", send_referrer=False)
             elif 10 <= e.x < 35 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_back()
             elif 40 <= e.x < 65 and 50 <= e.y < 90:
@@ -439,7 +442,7 @@ class Browser:
     
     def handle_enter(self, e):
         if self.focus == "address bar":
-            self.tabs[self.active_tab].load(self.address_bar)
+            self.tabs[self.active_tab].load(self.address_bar, send_referrer=False)
             self.focus = None
             self.draw()
         if self.focus == "content":
@@ -465,7 +468,7 @@ class Browser:
     
     def load(self, url):
         new_tab = Tab(self)
-        new_tab.load(url)
+        new_tab.load(url, send_referrer=False)
         self.active_tab = len(self.tabs)
         self.tabs.append(new_tab)
         self.address_bar = ""

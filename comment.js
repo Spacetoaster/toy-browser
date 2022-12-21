@@ -16,10 +16,10 @@ function lengthCheck() {
 //   if (!allow_submit) e.preventDefault();
 // })
 
-var a = new XMLHttpRequest();
+// var a = new XMLHttpRequest();
 // api.github.com sends "Access-Control-Allow-Origin: *", so it should work
-a.open("GET", "https://api.github.com/", false)
+// a.open("GET", "https://api.github.com/", false)
 // example.org sends no "Access-Control-Allow-Origin"-Header, request should not work
 // a.open("GET", "http://example.org/", false)
-a.send()
-console.log("XHR response: " + a.responseText)
+// a.send()
+// console.log("XHR response: " + a.responseText)

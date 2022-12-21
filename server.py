@@ -113,6 +113,7 @@ def list_topics(session):
         out += "</form>"
     else:
         out += "<a href=/login>Sign in to add a topic</a><br>"
+    out += "<a href=\"http://example.org/\">example.org</a>"
     return out
 
 def form_decode(body):
@@ -156,6 +157,7 @@ def login_form(session):
     body += "<input name=nonce type=hidden value=" + nonce + ">"
     body += "<p><button>Log in</button></p>"
     body += "</form>"
+    body += "<a href=\"http://example.org/\">example.org</a>"
     return body
 
 s = socket.socket(
@@ -181,13 +183,13 @@ def cleanup_sessions():
         else:
             session_age = expires - now
         out += " {} {}".format(token, session_age.seconds)
-    print(out)
+    # print(out)
     for token in SESSIONS:
         session = SESSIONS[token]
         if "expires" in session and is_cookie_expired(session["expires"]):
             print("deleting session with token {}".format(token))
             delete_tokens.append(token)
-    print("cleanup_sessions: deleting {} of {} sessions".format(len(delete_tokens), len(SESSIONS)))
+    # print("cleanup_sessions: deleting {} of {} sessions".format(len(delete_tokens), len(SESSIONS)))
     for token in delete_tokens:
         del SESSIONS[token]
 
@@ -213,15 +215,19 @@ def handle_connection(conx):
         token = headers["cookie"][len("token="):]
     else:
         token = str(random.random())[2:]
+    if "referer" in headers:
+        print("referer: {}".format(headers["referer"]))
     cleanup_sessions()
     session = SESSIONS.setdefault(token, { "expires": datetime.now(timezone.utc) + timedelta(hours=1) })
     status, body = do_request(session, method, url, headers, body)
     response = "HTTP/1.0 {}\r\n".format(status)
     response += "Content-Length: {}\r\n".format(len(body.encode("utf8")))
     response += "Content-Security-Policy: {}\r\n".format(csp)
+    response += "Referrer-Policy: strict-origin-when-cross-origin\r\n"
+    # response += "Referrer-Policy: no-referrer\r\n"
     # response += "Cache-Control: max-age=10000\r\n"
     if "cookie" not in headers:
-        print("sending new cookie")
+        # print("sending new cookie")
         template = "Set-Cookie: token={}; SameSite=Lax"
         template += "; Expires={}".format(datetime_to_http_date(session["expires"]))
         template += "\r\n"
