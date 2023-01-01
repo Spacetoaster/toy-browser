@@ -9,7 +9,7 @@ MAX_REDIRECTS = 10
 COOKIE_JAR = {}
 
 def referrer_header(scheme, host, path, top_level_url, referrer_policy):
-    if not top_level_url:
+    if not top_level_url or top_level_url.startswith("file"):
         return None
     if referrer_policy == "strict-origin-when-cross-origin" or referrer_policy == None:
         top_level_scheme, _, top_level_host, _ = top_level_url.split("/", 3)

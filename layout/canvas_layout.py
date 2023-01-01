@@ -25,7 +25,7 @@ class CanvasLayout:
         self.height = 150
 
     def paint(self, display_list):
-        display_list.append(DrawRect(self.x, self.y, self.x + self.width, self.y + self.height, "lightgrey"))
+        display_list.append(DrawRect(self.x, self.y, self.x + self.width, self.y + self.height, "white"))
         context = canvasContexts.get(self.node)
         if not context:
             return

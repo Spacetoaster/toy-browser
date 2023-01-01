@@ -3,8 +3,6 @@ function lengthCheck() {
   var value = this.getAttribute("value");
   if (value.length > 5) {
     console.log("Input " + name + "has too much text.");
-    var test = document.querySelectorAll(".innerHtmlTest")
-    test[0].innerHTML = "this was set by JS!"
   }
 }
 

@@ -3,15 +3,17 @@ from helpers import resolve_url, tree_to_list, url_origin
 from layout.inline_layout import get_font, visited_urls, InputLayout
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
-import tkinter
-import tkinter.font
-from tkinter.messagebox import askyesno
 from layout.document_layout import DocumentLayout
 from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
 from style import CSSParser, style, cascade_priority
 import urllib.parse
 import dukpy
 from js_context import JSContext
+import ctypes
+import sdl2
+import skia
+from layout.skia_helpers import draw_rect, draw_line, draw_text, parse_color
+import math
 
 def handle_special_pages(url, browser):
     if url == "about:bookmarks":
@@ -132,7 +134,8 @@ class Tab:
             self.load(next_url, back_or_forward=True, req_body=next_body, send_referrer=False)
 
     def confirm_form_resubmission(self):
-        return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
+        # return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
+        return True
     
     def scrolldown(self):
         max_y = self.document.height - (self.browser.height - CHROME_PX)
@@ -246,9 +249,7 @@ class Tab:
 
     def draw(self, canvas):
         for cmd in self.display_list:
-            if cmd.top > self.scroll + self.browser.height - CHROME_PX: continue
-            if cmd.bottom < self.scroll: continue
-            cmd.execute(self.scroll - CHROME_PX, canvas)
+            cmd.execute(canvas)
         if self.focus:
             focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
                     and isinstance(obj, InputLayout)]
@@ -257,24 +258,10 @@ class Tab:
                 type = self.focus.attributes.get("type", "")
                 if type != "checkbox":
                     text = self.focus.attributes.get("value", "")
-                    x = obj.x + obj.font.measure(text)
+                    x = obj.x + obj.font.measureText(text)
                     y = obj.y - self.scroll + CHROME_PX
-                    canvas.create_line(x, y, x, y + obj.height, fill="black")
-        self.drawScrollbar(canvas)
-    
-    def drawScrollbar(self, canvas):
-        page_height = self.browser.height - CHROME_PX
-        show_scrollbar = self.document.height > page_height
-        if not show_scrollbar:
-            return
-        scrollbar_height = (page_height / self.document.height) * page_height
-        scrollbar_offset = (self.scroll / self.document.height) * page_height + CHROME_PX
-        canvas.create_rectangle(
-            self.browser.width - 8, scrollbar_offset,
-            self.browser.width, scrollbar_offset + scrollbar_height,
-            width=0,
-            fill="#333",
-        )
+                    # self.display_list.append(DrawLine(x, y, x, y + obj.height))
+                    draw_line(canvas, x, y, x, y + obj.height)
     
     def resize(self, width):
         self.document.layout(width)
@@ -286,11 +273,30 @@ class Tab:
 
 class Browser:
     def __init__(self):
-        self.window = tkinter.Tk()
-        self.canvas = tkinter.Canvas(self.window, width=WIDTH, height=HEIGHT, bg="white")
+        self.chrome_surface = skia.Surface(WIDTH, CHROME_PX)
+        self.tab_surface = None
+        self.sdl_window = sdl2.SDL_CreateWindow(b"Browser",
+            sdl2.SDL_WINDOWPOS_CENTERED, sdl2.SDL_WINDOWPOS_CENTERED,
+            WIDTH, HEIGHT, sdl2.SDL_WINDOW_SHOWN)
+        self.root_surface = skia.Surface.MakeRaster(
+            skia.ImageInfo.Make(
+                WIDTH, HEIGHT,
+                ct=skia.kRGBA_8888_ColorType,
+                at=skia.kUnpremul_AlphaType
+            ))
+        if sdl2.SDL_BYTEORDER == sdl2.SDL_BIG_ENDIAN:
+            self.RED_MASK = 0xff000000
+            self.GREEN_MASK = 0x00ff0000
+            self.BLUE_MASK = 0x0000ff00
+            self.ALPHA_MASK = 0x000000ff
+        else:
+            self.RED_MASK = 0x000000ff
+            self.GREEN_MASK = 0x0000ff00
+            self.BLUE_MASK = 0x00ff0000
+            self.ALPHA_MASK = 0xff000000
         self.width = WIDTH
         self.height = HEIGHT
-        self.canvas.pack(expand=True, fill=tkinter.BOTH)
+        # self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.zoom_factor = 1
         self.tabs = []
         self.active_tab = None
@@ -298,84 +304,135 @@ class Browser:
         self.address_bar = ""
         self.text_cursor_position = 0
         self.bookmarks = set()
-        self.window.bind("<Down>", self.handle_down)
-        self.window.bind("<Up>", self.handle_up)
-        self.window.bind("<MouseWheel>", self.handle_mousewheel)
-        self.window.bind("<Configure>", self.handle_resize)
-        self.window.bind("<Button-1>", self.handle_click)
-        self.window.bind("<Button-2>", self.handle_middle_click)
-        self.window.bind("<Key>", self.handle_key)
-        self.window.bind("<Return>", self.handle_enter)
-        self.window.bind("<BackSpace>", self.handle_backspace)
-        self.window.bind("<Left>", self.handle_left)
-        self.window.bind("<Right>", self.handle_right)
-        self.window.bind("<Tab>", self.handle_tab)
+        # self.window.bind("<Down>", self.handle_down)
+        # self.window.bind("<Up>", self.handle_up)
+        # self.window.bind("<MouseWheel>", self.handle_mousewheel)
+        # self.window.bind("<Configure>", self.handle_resize)
+        # self.window.bind("<Button-1>", self.handle_click)
+        # self.window.bind("<Button-2>", self.handle_middle_click)
+        # self.window.bind("<Key>", self.handle_key)
+        # self.window.bind("<Return>", self.handle_enter)
+        # self.window.bind("<BackSpace>", self.handle_backspace)
+        # self.window.bind("<Left>", self.handle_left)
+        # self.window.bind("<Right>", self.handle_right)
+        # self.window.bind("<Tab>", self.handle_tab)
 
     def handle_tab(self, e):
         self.tabs[self.active_tab].switch_to_next_input()
+        self.raster_tab()
         self.draw()
     
-    def draw(self):
-        self.canvas.delete("all")
+    def raster_tab(self):
+        active_tab = self.tabs[self.active_tab]
+        tab_height = math.ceil(active_tab.document.height)
+
+        if not self.tab_surface or tab_height != self.tab_surface.height():
+            self.tab_surface = skia.Surface(WIDTH, tab_height)
+        canvas = self.tab_surface.getCanvas()
+        canvas.clear(skia.ColorWHITE)
         # draw page content
-        self.tabs[self.active_tab].draw(self.canvas)
+        self.tabs[self.active_tab].draw(canvas)
+    
+    def raster_chrome(self):
+        canvas = self.chrome_surface.getCanvas()
+        canvas.clear(skia.ColorWHITE)
         # draw tabs
-        self.canvas.create_rectangle(0, 0, self.width, CHROME_PX, fill="white", outline="black")
-        tabfont = get_font(20, "normal", "roman")
+        draw_rect(canvas, -1, 0, WIDTH, CHROME_PX, fill="white")
+        draw_rect(canvas, -1, 0, WIDTH, CHROME_PX - 1)
+        tabfont = skia.Font(skia.Typeface('Arial'), 20)
         for i, tab in enumerate(self.tabs):
             name = "Tab {}".format(i)
             x1, x2 = 40 + 80 * i, 120 + 80 * i
-            self.canvas.create_line(x1, 0, x1, 40, fill="black")
-            self.canvas.create_line(x2, 0, x2, 40, fill="black")
-            self.canvas.create_text(x1 + 10, 10, anchor="nw", text=name, font=tabfont, fill="black")
+            draw_line(canvas, x1, 0, x1, 40)
+            draw_line(canvas, x2, 0, x2, 40)
+            draw_text(canvas, x1 + 10, 10, name, tabfont)
             if i == self.active_tab:
-                self.canvas.create_line(0, 40, x1, 40, fill="black")
-                self.canvas.create_line(x2, 40, self.width, 40, fill="black")
-            buttonfont = get_font(30, "normal", "roman")
-            self.canvas.create_rectangle(10, 10, 30, 30, outline="black", width=1)
-            self.canvas.create_text(11, 0, anchor="nw", text="+", font=buttonfont, fill="black")
+                draw_line(canvas, 0, 40, x1, 40)
+                draw_line(canvas, x2, 40, WIDTH, 40)
+            buttonfont = skia.Font(skia.Typeface('Arial'), 30)
+            draw_rect(canvas, 10, 10, 30, 30)
+            draw_text(canvas, 11, 4, "+", buttonfont)
         # draw address bar
-        self.canvas.create_rectangle(70, 50, self.width - 60, 90, outline="black", width=1)
+        draw_rect(canvas, 70, 50, WIDTH - 60, 90)
         if self.focus == "address bar":
-            self.canvas.create_text(85, 55, anchor="nw", text=self.address_bar, font=buttonfont, fill="black")
-            w = buttonfont.measure(self.address_bar[:self.text_cursor_position])
-            self.canvas.create_line(85 + w, 55, 85 + w, 85, fill="black")
+            draw_text(canvas, 85, 55, self.address_bar, buttonfont)
+            w = buttonfont.measureText(self.address_bar[:self.text_cursor_position])
+            draw_line(canvas, 85 + w, 55, 85 + w, 85)
         else:
             url = self.tabs[self.active_tab].url
-            self.canvas.create_text(85, 55, anchor="nw", text=url, font=buttonfont, fill="black")
-            if self.tabs[self.active_tab].is_secure_connection:
-                self.canvas.create_text(self.width - 80, 70, text="\N{lock}", font=buttonfont, fill="black")
+            draw_text(canvas, 85, 55, url, font=buttonfont)
+            # if self.tabs[self.active_tab].is_secure_connection:
+            #     draw_text(canvas, WIDTH - 80, 70, "HTTPS", buttonfont)
         # draw back button
-        back_color = "black" if len(self.tabs[self.active_tab].history) > 1 else "lightgray"
-        self.canvas.create_rectangle(10, 50, 35, 90, outline="black", width=1)
-        self.canvas.create_polygon(15, 70, 30, 55, 30, 85, fill=back_color)
+        back_color = "black" if len(self.tabs[self.active_tab].history) > 1 else "gray"
+        draw_rect(canvas, 10, 50, 35, 90)
+        path = skia.Path().moveTo(15, 70).lineTo(30, 55).lineTo(30, 85)
+        paint = skia.Paint(Color=parse_color(back_color), Style=skia.Paint.kFill_Style)
+        canvas.drawPath(path, paint)
         # draw forward button
-        forward_color = "black" if len(self.tabs[self.active_tab].future) > 0 else "lightgray"
-        self.canvas.create_rectangle(40, 50, 65, 90, outline="black", width=1)
-        self.canvas.create_polygon(45, 55, 60, 70, 45, 85, fill=forward_color)
+        forward_color = "black" if len(self.tabs[self.active_tab].future) > 0 else "gray"
+        draw_rect(canvas, 40, 50, 65, 90)
+        path = skia.Path().moveTo(45, 55).lineTo(60, 70).lineTo(45, 85)
+        paint = skia.Paint(Color=parse_color(forward_color), Style=skia.Paint.kFill_Style)
+        canvas.drawPath(path, paint)
         # bookmark button
-        bookmarkfont = get_font(12, "normal", "roman")
-        bookmark_bgcolor = "yellow" if self.tabs[self.active_tab].url in self.bookmarks else None
-        self.canvas.create_rectangle(self.width - 50, 50, self.width - 10, 90, outline="black", width=1, fill=bookmark_bgcolor)
-        self.canvas.create_text(self.width - 44, 55, anchor="nw", text="book", font=bookmarkfont, fill="black")
-        self.canvas.create_text(self.width - 44, 70, anchor="nw", text="mark", font=bookmarkfont, fill="black")
+        bookmarkfont = skia.Font(skia.Typeface('Arial'), 12)
+        bookmark_bgcolor = "yellow" if self.tabs[self.active_tab].url in self.bookmarks else "white"
+        draw_rect(canvas, WIDTH - 50, 50, WIDTH - 10, 90)
+        draw_rect(canvas, WIDTH - 49, 51, WIDTH - 11, 89, fill=bookmark_bgcolor, width=10)
+        draw_text(canvas, WIDTH - 44, 55, "book", bookmarkfont)
+        draw_text(canvas, WIDTH - 44, 70, "mark", bookmarkfont)
+    
+    def draw(self):
+        canvas = self.root_surface.getCanvas()
+        canvas.clear(skia.ColorWHITE)
 
-    def handle_down(self, e):
+        # draw tab
+        tab_rect = skia.Rect.MakeLTRB(0, CHROME_PX, WIDTH, HEIGHT)
+        tab_offset = CHROME_PX - self.tabs[self.active_tab].scroll
+        canvas.save()
+        canvas.clipRect(tab_rect)
+        canvas.translate(0, tab_offset)
+        self.tab_surface.draw(canvas, 0, 0)
+        canvas.restore()
+
+        # draw chrome
+        chrome_rect = skia.Rect.MakeLTRB(0, 0, WIDTH, CHROME_PX)
+        canvas.save()
+        canvas.clipRect(chrome_rect)
+        self.chrome_surface.draw(canvas, 0, 0)
+        canvas.restore()
+
+        skia_image = self.root_surface.makeImageSnapshot()
+        skia_bytes = skia_image.tobytes()
+        depth = 32
+        pitch = 4 * WIDTH
+        sdl_surface = sdl2.SDL_CreateRGBSurfaceFrom(
+            skia_bytes, WIDTH, HEIGHT, depth, pitch, self.RED_MASK, 
+            self.GREEN_MASK, self.BLUE_MASK, self.ALPHA_MASK)
+        rect = sdl2.SDL_Rect(0, 0, WIDTH, HEIGHT)
+        window_surface = sdl2.SDL_GetWindowSurface(self.sdl_window)
+        sdl2.SDL_BlitSurface(sdl_surface, rect, window_surface, rect)
+        sdl2.SDL_UpdateWindowSurface(self.sdl_window)
+
+    def handle_down(self):
         self.tabs[self.active_tab].scrolldown()
         self.draw()
     
-    def handle_up(self, e):
+    def handle_up(self):
         self.tabs[self.active_tab].scrollup()
         self.draw()
     
     def handle_left(self, e):
         if self.focus == "address bar":
             self.text_cursor_position = max(0, self.text_cursor_position - 1)
+            self.raster_chrome()
             self.draw()
     
     def handle_right(self, e):
         if self.focus == "address bar":
             self.text_cursor_position = min(len(self.address_bar), self.text_cursor_position + 1)
+            self.raster_chrome()
             self.draw()
     
     def handle_mousewheel(self, e):
@@ -383,13 +440,15 @@ class Browser:
         if e.delta == 1:
             self.handle_up(e)
         elif e.delta == -1:
-            self.handle_down(e)
+            self.handle_down()
     
     def handle_resize(self, e):
         if e.width > 1 and e.height > 1:
             self.width = e.width
             self.height = e.height
         self.tabs[self.active_tab].resize(self.width)
+        self.raster_chrome()
+        self.raster_tab
         self.draw()
     
     def handle_click(self, e):
@@ -398,20 +457,26 @@ class Browser:
             self.tabs[self.active_tab].blur()
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.active_tab = int((e.x - 40) / 80)
+                self.raster_tab()
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
-                self.load("https://browser.engineering/", send_referrer=False)
+                self.load("https://browser.engineering/")
+                self.raster_tab()
             elif 10 <= e.x < 35 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_back()
+                self.raster_tab()
             elif 40 <= e.x < 65 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_forward()
+                self.raster_tab()
             elif 80 <= e.x < self.width - 60 and 40 <= e.y < 90:
                 self.focus = "address bar"
                 self.address_bar = ""
             elif self.width - 50 <= e.x < self.width - 10 and 50 <= e.y < 90:
                 self.bookmark()
+            self.raster_chrome()
         else:
             self.focus = "content"
             self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
+            self.raster_tab()
         self.draw()
     
     def handle_middle_click(self, e):
@@ -423,39 +488,46 @@ class Browser:
             new_tab.load(url)
             self.active_tab = len(self.tabs)
             self.tabs.append(new_tab)
+            self.raster_chrome()
+            self.raster_tab()
             self.draw()
     
-    def handle_key(self, e):
-        if len(e.char) == 0: return
-        if not (0x20 <= ord(e.char) < 0x7f): return
+    def handle_key(self, char):
+        if len(char) == 0: return
+        if not (0x20 <= ord(char) < 0x7f): return
 
         if self.focus == "address bar":
             prefix = self.address_bar[:self.text_cursor_position]
             suffix = self.address_bar[self.text_cursor_position:]
-            self.address_bar = prefix + e.char + suffix
+            self.address_bar = prefix + char + suffix
             self.text_cursor_position += 1
+            self.raster_chrome()
             self.draw()
         elif self.focus == "content":
-            self.tabs[self.active_tab].keypress(e.char)
+            self.tabs[self.active_tab].keypress(char)
+            self.raster_tab()
             self.draw()
-            
     
-    def handle_enter(self, e):
+    def handle_enter(self):
         if self.focus == "address bar":
             self.tabs[self.active_tab].load(self.address_bar, send_referrer=False)
             self.focus = None
+            self.raster_chrome()
+            self.raster_tab()
             self.draw()
         if self.focus == "content":
             self.tabs[self.active_tab].submit_form_by_enter()
             self.focus = None
+            self.raster_tab()
             self.draw()
     
-    def handle_backspace(self, e):
+    def handle_backspace(self):
         if self.focus == "address bar":
             prefix = self.address_bar[:self.text_cursor_position]
             suffix = self.address_bar[self.text_cursor_position:]
             self.address_bar = prefix[:-1] + suffix
             self.text_cursor_position = max(self.text_cursor_position - 1, 0)
+            self.raster_chrome()
             self.draw()
     
     def bookmark(self):
@@ -464,6 +536,7 @@ class Browser:
             self.bookmarks.remove(url)
         else:
             self.bookmarks.add(url)
+        self.raster_chrome()    
         self.draw()
     
     def load(self, url):
@@ -473,9 +546,36 @@ class Browser:
         self.tabs.append(new_tab)
         self.address_bar = ""
         self.focus = None
+        self.raster_chrome()
+        self.raster_tab()
         self.draw()
+    
+    def handle_quit(self):
+        sdl2.SDL_DestroyWindow(self.sdl_window)
 
 if __name__ == "__main__":
+    import sys
+    sdl2.SDL_Init(sdl2.SDL_INIT_EVENTS)
+    browser = Browser()
     url = sys.argv[1] if len(sys.argv) >= 2 else "file://test.html"
-    Browser().load(url)
-    tkinter.mainloop()
+    browser.load(url)
+    event = sdl2.SDL_Event()
+    while True:
+        while sdl2.SDL_PollEvent(ctypes.byref(event)) != 0:
+            if event.type == sdl2.SDL_QUIT:
+                browser.handle_quit()
+                sdl2.SDL_Quit()
+                sys.exit()
+            elif event.type == sdl2.SDL_MOUSEBUTTONUP:
+                browser.handle_click(event.button)
+            elif event.type == sdl2.SDL_KEYDOWN:
+                if event.key.keysym.sym == sdl2.SDLK_RETURN:
+                    browser.handle_enter()
+                elif event.key.keysym.sym == sdl2.SDLK_DOWN:
+                    browser.handle_down()
+                elif event.key.keysym.sym == sdl2.SDLK_UP:
+                    browser.handle_up()
+                elif event.key.keysym.sym == sdl2.SDLK_BACKSPACE:
+                    browser.handle_backspace()
+            elif event.type == sdl2.SDL_TEXTINPUT:
+                browser.handle_key(event.text.text.decode('utf8'))

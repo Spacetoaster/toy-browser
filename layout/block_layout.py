@@ -1,6 +1,8 @@
 from parser import Text, Element
 from .inline_layout import InlineLayout
 from .canvas_layout import CanvasLayout
+from .drawing import DrawRRect, paint_visual_effects
+import skia
 
 def layout_mode(node):
     if isinstance(node, Text):
@@ -61,5 +63,13 @@ class BlockLayout:
         self.compute_height()
     
     def paint(self, display_list):
+        cmds = []
+        bgcolor = self.node.style.get("background-color", "transparent")
+        rect = skia.Rect.MakeLTRB(self.x, self.y, self.x + self.width, self.y + self.height)
+        if bgcolor != "transparent":
+            radius = float(self.node.style.get("border-radius", "0px")[:-2])
+            cmds.append(DrawRRect(rect, radius, bgcolor))
         for child in self.children:
-            child.paint(display_list)
+            child.paint(cmds)
+        cmds = paint_visual_effects(self.node, cmds, rect)
+        display_list.extend(cmds)

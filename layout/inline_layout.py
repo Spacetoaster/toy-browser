@@ -1,22 +1,29 @@
 from parser import Element, Text
-import tkinter.font
-from .drawing import DrawRect, DrawText, DrawCheckmark
+from .drawing import DrawRect, DrawText, DrawCheckmark, DrawRRect
 from constants import INPUT_WIDTH_PX
+import skia
 
 FONTS = {}
 
 visited_urls = {}
 
-def get_font(size, weight, slant, family = None):
-    if weight != "bold" or weight != "normal": weight = "normal"
-    key = (size, weight, slant, family)
+def get_font(size, weight, style, family=None):
+    # if weight != "bold" or weight != "normal": weight = "normal"
+    key = (weight, weight, style)
     if key not in FONTS:
-        if family:
-            font = tkinter.font.Font(size=size, weight=weight, slant=slant, family=family)
-        else:    
-            font = tkinter.font.Font(size=size, weight=weight, slant=slant)
+        if weight == "bold":
+            skia_weight = skia.FontStyle.kBold_Weight
+        else:
+            skia_weight = skia.FontStyle.kNormal_Weight
+        if style == "italic":
+            skia_style = skia.FontStyle.kItalic_Slant
+        else:
+            skia_style = skia.FontStyle.kUpright_Slant
+        skia_width = skia.FontStyle.kNormal_Width
+        style_info = skia.FontStyle(skia_weight, skia_width, skia_style)
+        font = skia.Typeface('Arial', style_info)
         FONTS[key] = font
-    return FONTS[key]
+    return skia.Font(FONTS[key], size)
 
 class InputLayout:
     def __init__(self, node, parent, previous):
@@ -35,16 +42,17 @@ class InputLayout:
         size = int(float(self.node.style["font-size"][:-2]) * 0.75)
         self.font = get_font(size, weight, style, family)
         self.width = INPUT_WIDTH_PX
+        lineheight = self.font.getMetrics().fDescent - self.font.getMetrics().fAscent
         if self.is_checkbox:
-            self.width = self.font.metrics("linespace")
+            self.width = lineheight
 
         if self.previous:
-            space = self.previous.font.measure(" ")
+            space = self.previous.font.measureText(" ")
             self.x = self.previous.x + space + self.previous.width
         else:
             self.x = self.parent.x
         
-        self.height = self.font.metrics("linespace")
+        self.height = lineheight
     
     def paint(self, display_list):
         bgcolor = self.node.style.get("background-color", "transparent")
@@ -91,11 +99,11 @@ class LineLayout:
         if len(self.children) == 0:
             self.height = 0
             return
-        max_ascent = max([word.font.metrics("ascent") for word in self.children])
+        max_ascent = max([-word.font.getMetrics().fAscent for word in self.children])
         baseline = self.y + 1.25 * max_ascent
         for word in self.children:
-            word.y = baseline - word.font.metrics("ascent")
-        max_descent = max([word.font.metrics("descent") for word in self.children])
+            word.y = baseline - (-word.font.getMetrics().fAscent)
+        max_descent = max([word.font.getMetrics().fDescent for word in self.children])
         self.height = 1.25 * (max_ascent + max_descent)
     
     def paint(self, display_list):
@@ -117,15 +125,16 @@ class TextLayout:
         if style == "normal": style = "roman"
         size = int(float(self.node.style["font-size"][:-2]) * 0.75)
         self.font = get_font(size, weight, style, family)
-        self.width = self.font.measure(self.word)
+        self.width = self.font.measureText(self.word)
 
         if self.previous:
-            space = self.previous.font.measure(" ")
+            space = self.previous.font.measureText(" ")
             self.x = self.previous.x + space + self.previous.width
         else:
             self.x = self.parent.x
         
-        self.height = self.font.metrics("linespace")
+        lineheight = self.font.getMetrics().fDescent - self.font.getMetrics().fAscent
+        self.height = lineheight
     
     def paint(self, display_list):
         color = self.node.style["color"]
@@ -163,9 +172,12 @@ class InlineLayout:
 
         if not is_atomic:
             if bgcolor != "transparent" and not "var" in bgcolor:
-                x2, y2 = self.x + self.width, self.y + self.height
-                rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
-                display_list.append(rect)
+                radius = float(self.node.style.get("border-radius", "0px")[:-2])
+                rect = skia.Rect.MakeLTRB(self.x, self.y, self.x + self.width, self.y + self.height)
+                display_list.append(DrawRRect(rect, radius, bgcolor))
+                # x2, y2 = self.x + self.width, self.y + self.height
+                # rect = DrawRect(self.x, self.y, x2, y2, bgcolor)
+                # display_list.append(rect)
         for child in self.children:
             child.paint(display_list)
     
@@ -189,7 +201,7 @@ class InlineLayout:
         size = int(float(node.style["font-size"][:-2]) * 0.75)
         font = get_font(size, weight, style, family)
         for word in node.text.split():
-            w = font.measure(word)
+            w = font.measureText(word)
             # don't create a new line if the line is empty, but the word still doesn't fit
             if not self.word_fits_line(w) and len(self.children[-1].children) > 0:
                 self.new_line()
@@ -197,7 +209,7 @@ class InlineLayout:
             text = TextLayout(node, word, line, self.previous_word)
             line.children.append(text)
             self.previous_word = text
-            self.cursor_x += w + font.measure(" ")
+            self.cursor_x += w + font.measureText(" ")
     
     def get_font(self, node):
         weight = node.style["font-weight"]
@@ -218,7 +230,7 @@ class InlineLayout:
         line.children.append(input)
         self.previous_word = input
         font = self.get_font(node)
-        self.cursor_x += w + font.measure(" ")
+        self.cursor_x += w + font.measureText(" ")
     
     def new_line(self):
         self.previous_word = None
