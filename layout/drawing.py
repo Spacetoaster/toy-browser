@@ -1,5 +1,5 @@
 import skia
-from .skia_helpers import draw_line, draw_text, draw_rect, parse_color
+from .skia_helpers import draw_line, draw_text, draw_rect, draw_rrect, scale_rrect
 
 class DrawText:
     def __init__(self, x1, y1, text, font, color):
@@ -52,12 +52,12 @@ class DrawRRect:
         self.right = self.rect.right()
         self.bottom = self.rect.bottom()
         self.rrect = skia.RRect.MakeRectXY(rect, radius, radius)
+        self.radius = radius
         self.color = color
         self.radius = radius
     
     def execute(self, canvas):
-        sk_color = parse_color(self.color)
-        canvas.drawRRect(self.rrect, paint=skia.Paint(Color=sk_color))
+        draw_rrect(canvas, self.rrect, self.radius, self.color)
 
 class DrawLine:
     def __init__(self, x1, y1, x2, y2):
@@ -94,10 +94,6 @@ class SaveLayer:
         self.rect = skia.Rect.MakeEmpty()
         for cmd in self.children:
             self.rect.join(cmd.rect)
-        self.top = self.rect.top()
-        self.left = self.rect.left()
-        self.right = self.rect.right()
-        self.bottom = self.rect.bottom()
     
     def execute(self, canvas):
         if self.should_save:
@@ -114,11 +110,12 @@ class ClipRRect:
         self.rrect = skia.RRect.MakeRectXY(rect, radius, radius)
         self.children = children
         self.should_clip = should_clip
+        self.radius = radius
     
     def execute(self, canvas):
         if self.should_clip:
             canvas.save()
-            canvas.clipRRect(self.rrect)
+            canvas.clipRRect(scale_rrect(self.rrect, self.radius))
         
         for cmd in self.children:
             cmd.execute(canvas)

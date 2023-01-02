@@ -13,7 +13,9 @@ import ctypes
 import sdl2
 import skia
 from layout.skia_helpers import draw_rect, draw_line, draw_text, parse_color
+import layout.skia_helpers
 import math
+import ctypes
 
 def handle_special_pages(url, browser):
     if url == "about:bookmarks":
@@ -273,17 +275,33 @@ class Tab:
 
 class Browser:
     def __init__(self):
-        self.chrome_surface = skia.Surface(WIDTH, CHROME_PX)
-        self.tab_surface = None
         self.sdl_window = sdl2.SDL_CreateWindow(b"Browser",
             sdl2.SDL_WINDOWPOS_CENTERED, sdl2.SDL_WINDOWPOS_CENTERED,
-            WIDTH, HEIGHT, sdl2.SDL_WINDOW_SHOWN)
+            WIDTH, HEIGHT, sdl2.SDL_WINDOW_SHOWN | sdl2.SDL_WINDOW_ALLOW_HIGHDPI)
+        w, h = ctypes.c_int(), ctypes.c_int()
+        self.renderer = sdl2.SDL_CreateRenderer(self.sdl_window, -1, 0)
+        # print(self.renderer)
+        sdl2.SDL_GetRendererOutputSize(self.renderer, w, h)
+        # print("Renderer output size: {} {}".format(w, h))
+        # wr, hr = ctypes.c_float(), ctypes.c_float()
+        self.scale = int(w.value / WIDTH)
+        layout.skia_helpers.scale_factor = self.scale
+        # print("scale: {}".format(scale))
+        # print(sdl2.SDL_RenderSetScale(self.renderer, 30, 30))
+        # sdl2.SDL_RenderGetScale(self.renderer, wr, hr)
+        # print("Renderer Scale: {} {}".format(wr, hr))
+        # res = sdl2.SDL_RenderSetScale(self.renderer, 2, 2)
+        # if res < 0:
+        #     # out = ctypes.c_char_p
+            # print(sdl2.SDL_GetError())
         self.root_surface = skia.Surface.MakeRaster(
             skia.ImageInfo.Make(
-                WIDTH, HEIGHT,
+                self.scale * WIDTH, self.scale * HEIGHT,
                 ct=skia.kRGBA_8888_ColorType,
                 at=skia.kUnpremul_AlphaType
             ))
+        self.chrome_surface = skia.Surface(self.scale * WIDTH, self.scale * CHROME_PX)
+        self.tab_surface = None
         if sdl2.SDL_BYTEORDER == sdl2.SDL_BIG_ENDIAN:
             self.RED_MASK = 0xff000000
             self.GREEN_MASK = 0x00ff0000
@@ -296,7 +314,6 @@ class Browser:
             self.ALPHA_MASK = 0xff000000
         self.width = WIDTH
         self.height = HEIGHT
-        # self.canvas.pack(expand=True, fill=tkinter.BOTH)
         self.zoom_factor = 1
         self.tabs = []
         self.active_tab = None
@@ -304,18 +321,6 @@ class Browser:
         self.address_bar = ""
         self.text_cursor_position = 0
         self.bookmarks = set()
-        # self.window.bind("<Down>", self.handle_down)
-        # self.window.bind("<Up>", self.handle_up)
-        # self.window.bind("<MouseWheel>", self.handle_mousewheel)
-        # self.window.bind("<Configure>", self.handle_resize)
-        # self.window.bind("<Button-1>", self.handle_click)
-        # self.window.bind("<Button-2>", self.handle_middle_click)
-        # self.window.bind("<Key>", self.handle_key)
-        # self.window.bind("<Return>", self.handle_enter)
-        # self.window.bind("<BackSpace>", self.handle_backspace)
-        # self.window.bind("<Left>", self.handle_left)
-        # self.window.bind("<Right>", self.handle_right)
-        # self.window.bind("<Tab>", self.handle_tab)
 
     def handle_tab(self, e):
         self.tabs[self.active_tab].switch_to_next_input()
@@ -327,7 +332,7 @@ class Browser:
         tab_height = math.ceil(active_tab.document.height)
 
         if not self.tab_surface or tab_height != self.tab_surface.height():
-            self.tab_surface = skia.Surface(WIDTH, tab_height)
+            self.tab_surface = skia.Surface(self.scale * WIDTH, self.scale * tab_height)
         canvas = self.tab_surface.getCanvas()
         canvas.clear(skia.ColorWHITE)
         # draw page content
@@ -366,13 +371,13 @@ class Browser:
         # draw back button
         back_color = "black" if len(self.tabs[self.active_tab].history) > 1 else "gray"
         draw_rect(canvas, 10, 50, 35, 90)
-        path = skia.Path().moveTo(15, 70).lineTo(30, 55).lineTo(30, 85)
+        path = skia.Path().moveTo(self.scale * 15, self.scale * 70).lineTo(self.scale * 30, self.scale * 55).lineTo(self.scale * 30, self.scale * 85)
         paint = skia.Paint(Color=parse_color(back_color), Style=skia.Paint.kFill_Style)
         canvas.drawPath(path, paint)
         # draw forward button
         forward_color = "black" if len(self.tabs[self.active_tab].future) > 0 else "gray"
         draw_rect(canvas, 40, 50, 65, 90)
-        path = skia.Path().moveTo(45, 55).lineTo(60, 70).lineTo(45, 85)
+        path = skia.Path().moveTo(self.scale * 45, self.scale * 55).lineTo(self.scale * 60, self.scale * 70).lineTo(self.scale * 45, self.scale * 85)
         paint = skia.Paint(Color=parse_color(forward_color), Style=skia.Paint.kFill_Style)
         canvas.drawPath(path, paint)
         # bookmark button
@@ -388,8 +393,8 @@ class Browser:
         canvas.clear(skia.ColorWHITE)
 
         # draw tab
-        tab_rect = skia.Rect.MakeLTRB(0, CHROME_PX, WIDTH, HEIGHT)
-        tab_offset = CHROME_PX - self.tabs[self.active_tab].scroll
+        tab_rect = skia.Rect.MakeLTRB(0, self.scale * CHROME_PX, self.scale * WIDTH, self.scale * HEIGHT)
+        tab_offset = self.scale * (CHROME_PX - self.tabs[self.active_tab].scroll)
         canvas.save()
         canvas.clipRect(tab_rect)
         canvas.translate(0, tab_offset)
@@ -397,23 +402,30 @@ class Browser:
         canvas.restore()
 
         # draw chrome
-        chrome_rect = skia.Rect.MakeLTRB(0, 0, WIDTH, CHROME_PX)
+        chrome_rect = skia.Rect.MakeLTRB(0, 0, self.scale * WIDTH, self.scale * CHROME_PX)
         canvas.save()
         canvas.clipRect(chrome_rect)
         self.chrome_surface.draw(canvas, 0, 0)
         canvas.restore()
 
         skia_image = self.root_surface.makeImageSnapshot()
+        # skia_image = skia_image.resize(WIDTH, HEIGHT, filterQuality=skia.FilterQuality.kHigh_FilterQuality)
         skia_bytes = skia_image.tobytes()
         depth = 32
-        pitch = 4 * WIDTH
+        pitch = 4 * self.scale * WIDTH
         sdl_surface = sdl2.SDL_CreateRGBSurfaceFrom(
-            skia_bytes, WIDTH, HEIGHT, depth, pitch, self.RED_MASK, 
+            skia_bytes, self.scale * WIDTH, 2 * HEIGHT, depth, pitch, self.RED_MASK, 
             self.GREEN_MASK, self.BLUE_MASK, self.ALPHA_MASK)
-        rect = sdl2.SDL_Rect(0, 0, WIDTH, HEIGHT)
-        window_surface = sdl2.SDL_GetWindowSurface(self.sdl_window)
-        sdl2.SDL_BlitSurface(sdl_surface, rect, window_surface, rect)
-        sdl2.SDL_UpdateWindowSurface(self.sdl_window)
+        # scaled = sdl2.sdlgfx.zoomSurface(sdl_surface, 0.5, 0.5, 1)
+        # rect = sdl2.SDL_Rect(0, 0, WIDTH, HEIGHT)
+        # dest_rect = sdl2.SDL_Rect(0, 0, WIDTH, HEIGHT)
+        # window_surface = sdl2.SDL_GetWindowSurface(self.sdl_window)
+        # sdl2.SDL_BlitSurface(sdl_surface, rect, window_surface, rect)
+        texture = sdl2.SDL_CreateTextureFromSurface(self.renderer, sdl_surface)
+        sdl2.SDL_RenderClear(self.renderer)
+        sdl2.SDL_RenderCopy(self.renderer, texture, None, None)
+        sdl2.SDL_RenderPresent(self.renderer)
+        # sdl2.SDL_UpdateWindowSurface(self.sdl_window)
 
     def handle_down(self):
         self.tabs[self.active_tab].scrolldown()
