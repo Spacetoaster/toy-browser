@@ -56,7 +56,7 @@ class CSSParser:
         self.whitespace()
         self.literal(":")
         self.whitespace()
-        val = self.word(allowWhitespace=True)
+        val = self.word(allowWhitespace=True, additionalChars="(),")
         return prop.lower(), val
     
     def body(self):
