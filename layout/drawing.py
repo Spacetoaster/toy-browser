@@ -88,7 +88,7 @@ class DrawCheckmark:
             self.right - 3, self.top + 2)
 
 class SaveLayer:
-    def __init__(self, sk_paint, children, should_save=True, should_paint_cmds=True):
+    def __init__(self, sk_paint, children, should_save=True, should_paint_cmds=True, blur=0):
         self.sk_paint = sk_paint
         self.children = children
         self.should_save = should_save
@@ -96,9 +96,13 @@ class SaveLayer:
         self.rect = skia.Rect.MakeEmpty()
         for cmd in self.children:
             self.rect.join(cmd.rect)
+        self.blur = blur
     
     def execute(self, canvas):
         if self.should_save:
+            if self.blur != 0:
+                scaled_blur = layout.skia_helpers.scale_factor * self.blur
+                self.sk_paint.setImageFilter(skia.BlurImageFilter.Make(scaled_blur, scaled_blur))
             canvas.saveLayer(paint=self.sk_paint)
         if self.should_paint_cmds:
             for cmd in self.children:
@@ -166,13 +170,14 @@ def paint_visual_effects(node, cmds, rect):
     needs_blend_isolation = blend_mode != skia.BlendMode.kSrcOver or needs_clip
     needs_opacity = opacity != 1.0
     transform = node.style.get("transform", "")
+    blur = parse_blur_filter(node.style.get("filter"))
 
     return [
         SaveLayer(skia.Paint(BlendMode=blend_mode, Alphaf=opacity), [
             Transform(rect, transform, [
                 ClipRRect(rect, clip_radius, cmds, should_clip=needs_clip)
             ])
-        ], should_save=needs_blend_isolation or needs_opacity) # what about needs_opacity?
+        ], should_save=needs_blend_isolation or needs_opacity or blur, blur=blur) # what about needs_opacity?
     ]
 
 def parse_blend_mode(blend_mode_str):
@@ -182,3 +187,22 @@ def parse_blend_mode(blend_mode_str):
         return skia.BlendMode.kDifference
     else:
         return skia.BlendMode.kSrcOver
+
+# only works with single filter and without whitespaces
+def parse_blur_filter(filter_str):
+    if not filter_str:
+        return 0
+    filter_str = filter_str.strip().split()[0]
+    if not filter_str.startswith("blur("):
+        return 0
+    filter_str = filter_str[5:]
+    if filter_str.endswith(");"):
+        filter_str = filter_str[:-2]
+    elif filter_str.endswith(")"):
+        filter_str = filter_str[:-1]
+    if filter_str.endswith("px"):
+        filter_str = filter_str[:-2]
+    filter_str = filter_str.strip()
+    if not filter_str.isnumeric():
+        return 0
+    return int(filter_str)
