@@ -47,3 +47,7 @@ context.fillRect(50, 50, 25, 25);
 context.fillStyle = "black";
 context.fillText("Hello world", 60, 60)
 context.fillText("Hello world", 65, 65)
+
+orangebox.addEventListener("click", function() {
+  console.log("clicked")
+})

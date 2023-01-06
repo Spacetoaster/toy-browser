@@ -145,12 +145,22 @@ class Tab:
     
     def scrollup(self):
         self.scroll = max(0, self.scroll - SCROLL_STEP)
-    
+
     def click(self, x, y, load = True):
+        def hittest(obj, x, y):
+            within_bounds = obj.x <= x < obj.x + obj.width and obj.y <= y < obj.y + obj.height
+            if not within_bounds:
+                return False
+            radius = float(obj.node.style.get("border-radius", "0px")[:-2])
+            if radius == 0:
+                return within_bounds
+            else:
+                rect = skia.Rect.MakeLTRB(obj.x, obj.y, obj.x + obj.width, obj.y + obj.height)
+                rrect = skia.RRect.MakeRectXY(rect, radius, radius)
+                click_location = skia.Rect.MakeLTRB(x, y, x + 1, y + 1)
+                return rrect.contains(click_location)
         y += self.scroll
-        objs = [obj for obj in tree_to_list(self.document, [])
-                if obj.x <= x < obj.x + obj.width
-                and obj.y <= y < obj.y + obj.height]
+        objs = [obj for obj in tree_to_list(self.document, []) if hittest(obj, x, y)]
         if not objs: return
         elt = objs[-1].node
         while elt:
