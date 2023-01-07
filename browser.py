@@ -4,7 +4,7 @@ from layout.inline_layout import get_font, visited_urls, InputLayout
 from request import request
 from parser import HTMLParser, ViewSourceParser, print_tree, Element, Text
 from layout.document_layout import DocumentLayout
-from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH
+from constants import CHROME_PX, SCROLL_STEP, HEIGHT, WIDTH, INTEREST_REGION_SIZE
 from style import CSSParser, style, cascade_priority
 import urllib.parse
 import dukpy
@@ -42,6 +42,7 @@ class Tab:
         self.document = None
         self.is_secure_connection = False
         self.referrer_policy = None
+        self.interest_region = [0, 0]
     
     def load(self, url, back_or_forward=False, req_body=None, send_referrer=True):
         only_fragment_changed = self.url != None and self.url.split("#")[0] == url.split("#")[0] and req_body == None
@@ -140,11 +141,25 @@ class Tab:
         return True
     
     def scrolldown(self):
-        max_y = self.document.height - (self.browser.height - CHROME_PX)
-        self.scroll = min(self.scroll + SCROLL_STEP, max_y)
+        max_y = max(0, self.document.height - (self.browser.height - CHROME_PX))
+        absolute_scroll = self.interest_region[0] + self.scroll
+        new_absolute_scroll = min(absolute_scroll + SCROLL_STEP, max_y)
+        new_scroll = new_absolute_scroll - self.interest_region[0]
+        self.scroll = new_scroll
+        if new_absolute_scroll + (self.browser.height - CHROME_PX) > self.interest_region[1]:
+            print("re-rastering (scoll-down)")
+            self.browser.raster_tab()
+            self.browser.draw()
     
     def scrollup(self):
-        self.scroll = max(0, self.scroll - SCROLL_STEP)
+        absolute_scroll = self.interest_region[0] + self.scroll
+        new_absolute_scroll = max(0, absolute_scroll - SCROLL_STEP)
+        new_scroll = new_absolute_scroll - self.interest_region[0]
+        self.scroll = new_scroll
+        if self.scroll < 0:
+            print("re-rastering (scroll-up)")
+            self.browser.raster_tab()
+            self.browser.draw()
 
     def click(self, x, y, load = True):
         def hittest(obj, x, y):
@@ -258,11 +273,37 @@ class Tab:
             self.focus = input_elements[(input_elements.index(self.focus) + 1) % len(input_elements)]
             self.focus.attributes["value"] = ""
             self.render()
+    
+    def compute_interest_region(self):
+        # interest region is in dots, not pixels
+        new_scroll = 0
+        absolute_scroll = self.interest_region[0] + self.scroll
+        new_region_start = absolute_scroll - INTEREST_REGION_SIZE / 2
+        extra_space_top, extra_space_bottom = 0, 0
+        if new_region_start < 0:
+            extra_space_top = -new_region_start
+        new_region_end = absolute_scroll + INTEREST_REGION_SIZE / 2
+        if new_region_end > self.document.height:
+            extra_space_bottom = new_region_end - self.document.height;
+        new_region_start = max(0, new_region_start - extra_space_bottom)
+        new_region_end = min(self.document.height, new_region_end + extra_space_top)
+        new_region_start = max(0, new_region_start)
+        new_region_end = min(self.document.height, new_region_end)
+        self.interest_region = [new_region_start, new_region_end]
+        new_scroll = absolute_scroll - self.interest_region[0]
+        print("interest region ", self.interest_region)
+        self.scroll = new_scroll
 
     def draw(self, canvas):
+        self.compute_interest_region()
+        canvas.save()
+        canvas.clipRect(skia.Rect.MakeLTRB(0, 0, WIDTH * self.browser.scale, INTEREST_REGION_SIZE * self.browser.scale))
+        canvas.translate(0, -self.interest_region[0] * self.browser.scale)
         for cmd in self.display_list:
             cmd.execute(canvas)
         if self.focus:
+            # fix code below before next exercise
+            # maybe debug interest region a little bit more
             focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
                     and isinstance(obj, InputLayout)]
             if focus_objects:
@@ -274,6 +315,7 @@ class Tab:
                     y = obj.y - self.scroll + CHROME_PX
                     # self.display_list.append(DrawLine(x, y, x, y + obj.height))
                     draw_line(canvas, x, y, x, y + obj.height)
+        canvas.restore()
     
     def resize(self, width):
         self.document.layout(width)
@@ -339,10 +381,10 @@ class Browser:
     
     def raster_tab(self):
         active_tab = self.tabs[self.active_tab]
-        tab_height = math.ceil(active_tab.document.height)
+        # tab_height = math.ceil(active_tab.document.height)
 
-        if not self.tab_surface or tab_height != self.tab_surface.height():
-            self.tab_surface = skia.Surface(self.scale * WIDTH, self.scale * tab_height)
+        if not self.tab_surface:
+            self.tab_surface = skia.Surface(self.scale * WIDTH, self.scale * INTEREST_REGION_SIZE)
         canvas = self.tab_surface.getCanvas()
         canvas.clear(skia.ColorWHITE)
         # draw page content
@@ -470,7 +512,7 @@ class Browser:
             self.height = e.height
         self.tabs[self.active_tab].resize(self.width)
         self.raster_chrome()
-        self.raster_tab
+        self.raster_tab()
         self.draw()
     
     def handle_click(self, e):
