@@ -18,11 +18,11 @@ def parse_color(color):
     else:
         return skia.ColorBLACK
 
-def draw_line(canvas, x1, y1, x2, y2):
+def draw_line(canvas, x1, y1, x2, y2, width=1):
     path = skia.Path().moveTo(x1 * scale_factor, y1 * scale_factor).lineTo(x2 * scale_factor, y2 * scale_factor)
     paint = skia.Paint(Color=skia.ColorBLACK)
     paint.setStyle(skia.Paint.kStroke_Style)
-    paint.setStrokeWidth(1)
+    paint.setStrokeWidth(width)
     canvas.drawPath(path, paint)
 
 def draw_text(canvas, x, y, text, font, color=None):

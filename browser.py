@@ -14,7 +14,6 @@ import sdl2
 import skia
 from layout.skia_helpers import draw_rect, draw_line, draw_text, parse_color
 import layout.skia_helpers
-import math
 import ctypes
 
 def handle_special_pages(url, browser):
@@ -287,12 +286,23 @@ class Tab:
             extra_space_bottom = new_region_end - self.document.height;
         new_region_start = max(0, new_region_start - extra_space_bottom)
         new_region_end = min(self.document.height, new_region_end + extra_space_top)
-        new_region_start = max(0, new_region_start)
-        new_region_end = min(self.document.height, new_region_end)
         self.interest_region = [new_region_start, new_region_end]
         new_scroll = absolute_scroll - self.interest_region[0]
         print("interest region ", self.interest_region)
         self.scroll = new_scroll
+    
+    def draw_input_focus(self, canvas):
+        focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
+                and isinstance(obj, InputLayout)]
+        if focus_objects:
+            obj = focus_objects[0]
+            type = self.focus.attributes.get("type", "")
+            if type != "checkbox":
+                text = self.focus.attributes.get("value", "")
+                x = obj.x + obj.font.measureText(text)
+                y = obj.y
+                # self.display_list.append(DrawLine(x, y, x, y + obj.height))
+                draw_line(canvas, x, y, x, y + obj.height, width=2)
 
     def draw(self, canvas):
         self.compute_interest_region()
@@ -302,19 +312,7 @@ class Tab:
         for cmd in self.display_list:
             cmd.execute(canvas)
         if self.focus:
-            # fix code below before next exercise
-            # maybe debug interest region a little bit more
-            focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
-                    and isinstance(obj, InputLayout)]
-            if focus_objects:
-                obj = focus_objects[0]
-                type = self.focus.attributes.get("type", "")
-                if type != "checkbox":
-                    text = self.focus.attributes.get("value", "")
-                    x = obj.x + obj.font.measureText(text)
-                    y = obj.y - self.scroll + CHROME_PX
-                    # self.display_list.append(DrawLine(x, y, x, y + obj.height))
-                    draw_line(canvas, x, y, x, y + obj.height)
+            self.draw_input_focus(canvas)
         canvas.restore()
     
     def resize(self, width):
@@ -380,9 +378,6 @@ class Browser:
         self.draw()
     
     def raster_tab(self):
-        active_tab = self.tabs[self.active_tab]
-        # tab_height = math.ceil(active_tab.document.height)
-
         if not self.tab_surface:
             self.tab_surface = skia.Surface(self.scale * WIDTH, self.scale * INTEREST_REGION_SIZE)
         canvas = self.tab_surface.getCanvas()
@@ -414,7 +409,7 @@ class Browser:
         if self.focus == "address bar":
             draw_text(canvas, 85, 55, self.address_bar, buttonfont)
             w = buttonfont.measureText(self.address_bar[:self.text_cursor_position])
-            draw_line(canvas, 85 + w, 55, 85 + w, 85)
+            draw_line(canvas, 85 + w, 55, 85 + w, 85, width=2)
         else:
             url = self.tabs[self.active_tab].url
             draw_text(canvas, 85, 55, url, font=buttonfont)
@@ -521,26 +516,22 @@ class Browser:
             self.tabs[self.active_tab].blur()
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.active_tab = int((e.x - 40) / 80)
-                self.raster_tab()
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
                 self.load("https://browser.engineering/")
-                self.raster_tab()
             elif 10 <= e.x < 35 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_back()
-                self.raster_tab()
             elif 40 <= e.x < 65 and 50 <= e.y < 90:
                 self.tabs[self.active_tab].go_forward()
-                self.raster_tab()
             elif 80 <= e.x < self.width - 60 and 40 <= e.y < 90:
                 self.focus = "address bar"
                 self.address_bar = ""
             elif self.width - 50 <= e.x < self.width - 10 and 50 <= e.y < 90:
                 self.bookmark()
-            self.raster_chrome()
         else:
             self.focus = "content"
             self.tabs[self.active_tab].click(e.x, e.y - CHROME_PX)
-            self.raster_tab()
+        self.raster_chrome()
+        self.raster_tab()
         self.draw()
     
     def handle_middle_click(self, e):

@@ -81,11 +81,11 @@ class DrawCheckmark:
 
     def execute(self, canvas):
         draw_line(canvas,
-            self.left + 2, self.top + 2,
-            self.right - 3, self.bottom - 3)
+            self.left + 1, self.top + 1,
+            self.right - 1, self.bottom - 1, width=2)
         draw_line(canvas,
-            self.left + 2, self.bottom - 3,
-            self.right - 3, self.top + 2)
+            self.left + 1, self.bottom - 1,
+            self.right - 1, self.top + 1, width=2)
 
 class SaveLayer:
     def __init__(self, sk_paint, children, should_save=True, should_paint_cmds=True, blur=0):
