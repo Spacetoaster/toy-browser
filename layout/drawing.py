@@ -88,7 +88,7 @@ class DrawCheckmark:
             self.right - 1, self.top + 1, width=2)
 
 class SaveLayer:
-    def __init__(self, sk_paint, children, should_save=True, should_paint_cmds=True, blur=0):
+    def __init__(self, sk_paint, children, should_save=True, should_paint_cmds=True, blur=0, z_index=0):
         self.sk_paint = sk_paint
         self.children = children
         self.should_save = should_save
@@ -97,6 +97,7 @@ class SaveLayer:
         for cmd in self.children:
             self.rect.join(cmd.rect)
         self.blur = blur
+        self.z_index = z_index
     
     def execute(self, canvas):
         if self.should_save:
@@ -109,6 +110,13 @@ class SaveLayer:
                 cmd.execute(canvas)
         if self.should_save:
             canvas.restore()
+
+def reorder_by_z_index(cmds):
+    def order(cmd):
+        if not isinstance(cmd, SaveLayer):
+            return 0
+        return cmd.z_index
+    return sorted(cmds, key=order)
 
 class ClipRRect:
     def __init__(self, rect, radius, children, should_clip=True):
@@ -123,7 +131,8 @@ class ClipRRect:
             canvas.save()
             canvas.clipRRect(scale_rrect(self.rrect, self.radius))
         
-        for cmd in self.children:
+        sorted_cmds = reorder_by_z_index(self.children)
+        for cmd in sorted_cmds:
             cmd.execute(canvas)
         
         if self.should_clip:
@@ -171,13 +180,14 @@ def paint_visual_effects(node, cmds, rect):
     needs_opacity = opacity != 1.0
     transform = node.style.get("transform", "")
     blur = parse_blur_filter(node.style.get("filter"))
+    z_index = int(node.style.get("z-index", "0")) if node.style.get("position", "static") != "static" else 0
 
     return [
         SaveLayer(skia.Paint(BlendMode=blend_mode, Alphaf=opacity), [
             Transform(rect, transform, [
                 ClipRRect(rect, clip_radius, cmds, should_clip=needs_clip)
             ])
-        ], should_save=needs_blend_isolation or needs_opacity or blur, blur=blur) # what about needs_opacity?
+        ], should_save=needs_blend_isolation or needs_opacity or blur, blur=blur, z_index=z_index)
     ]
 
 def parse_blend_mode(blend_mode_str):
