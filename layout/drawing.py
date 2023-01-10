@@ -119,12 +119,14 @@ def reorder_by_z_index(cmds):
     return sorted(cmds, key=order)
 
 class ClipRRect:
-    def __init__(self, rect, radius, children, should_clip=True):
+    def __init__(self, rect, radius, children, should_clip=True, scroll=0, has_background=False):
         self.rect = rect
         self.rrect = skia.RRect.MakeRectXY(rect, radius, radius)
         self.children = children
         self.should_clip = should_clip
         self.radius = radius
+        self.scroll = scroll
+        self.has_background = has_background
     
     def execute(self, canvas):
         if self.should_clip:
@@ -132,6 +134,11 @@ class ClipRRect:
             canvas.clipRRect(scale_rrect(self.rrect, self.radius))
         
         sorted_cmds = reorder_by_z_index(self.children)
+        if self.has_background:
+            sorted_cmds[0].execute(canvas)
+            sorted_cmds = sorted_cmds[1:]
+        if self.scroll:
+            canvas.translate(0, -self.scroll)
         for cmd in sorted_cmds:
             cmd.execute(canvas)
         
@@ -171,21 +178,33 @@ def paint_visual_effects(node, cmds, rect):
     opacity = float(node.style.get("opacity", "1.0"))
     blend_mode = parse_blend_mode(node.style.get("mix-blend-mode"))
     border_radius = float(node.style.get("border-radius", "0px")[:-2])
-    if node.style.get("overflow", "visible") == "clip":
+    overflow = node.style.get("overflow", "visible")
+    if overflow in ["clip", "scroll"]:
         clip_radius = border_radius
     else:
         clip_radius = 0
-    needs_clip = node.style.get("overflow", "visible") == "clip"
+    needs_clip = overflow in ["clip", "scroll"]
     needs_blend_isolation = blend_mode != skia.BlendMode.kSrcOver or needs_clip
     needs_opacity = opacity != 1.0
     transform = node.style.get("transform", "")
     blur = parse_blur_filter(node.style.get("filter"))
     z_index = int(node.style.get("z-index", "0")) if node.style.get("position", "static") != "static" else 0
 
+    needs_scroll = node.style.get("overflow", "") == "scroll"
+    if needs_scroll and not node in SCROLL_STATES:
+        inner_rect = skia.Rect.MakeEmpty()
+        for cmd in cmds:
+            inner_rect.join(cmd.rect)
+        print(rect)
+        print(inner_rect)
+        SCROLL_STATES[node] = (0, rect.height(), inner_rect.height())
+    scroll = SCROLL_STATES[node][0] if needs_scroll else 0
+    has_background = node.style.get("background-color", "") != ""
+
     return [
         SaveLayer(skia.Paint(BlendMode=blend_mode, Alphaf=opacity), [
             Transform(rect, transform, [
-                ClipRRect(rect, clip_radius, cmds, should_clip=needs_clip)
+                ClipRRect(rect, clip_radius, cmds, should_clip=needs_clip, scroll=scroll, has_background=has_background)
             ])
         ], should_save=needs_blend_isolation or needs_opacity or blur, blur=blur, z_index=z_index)
     ]
@@ -216,3 +235,21 @@ def parse_blur_filter(filter_str):
     if not filter_str.isnumeric():
         return 0
     return int(filter_str)
+
+SCROLL_STATES = {}
+
+def scrolldown_element(node):
+    if not SCROLL_STATES[node]:
+        return
+    scroll, height, inner_height = SCROLL_STATES[node]
+    max_scroll = max(0, layout.skia_helpers.scale_factor * (inner_height - height))
+    new_scroll = min(scroll + 20, max_scroll)
+    SCROLL_STATES[node] = (new_scroll, height, inner_height)
+
+
+def scrollup_element(node):
+    if not SCROLL_STATES[node]:
+        return
+    scroll, height, inner_height = SCROLL_STATES[node]
+    new_scroll = max(scroll - 20, 0)
+    SCROLL_STATES[node] = (new_scroll, height, inner_height)

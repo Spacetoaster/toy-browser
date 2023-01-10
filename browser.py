@@ -15,6 +15,7 @@ import skia
 from layout.skia_helpers import draw_rect, draw_line, draw_text, parse_color
 import layout.skia_helpers
 import ctypes
+from layout.drawing import SCROLL_STATES, scrolldown_element, scrollup_element
 
 def handle_special_pages(url, browser):
     if url == "about:bookmarks":
@@ -138,8 +139,22 @@ class Tab:
     def confirm_form_resubmission(self):
         # return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
         return True
+
+    def scrolldown_focus_element(self):
+        scrolldown_element(self.focus)
+        self.render()
+        self.browser.raster_tab()
+        self.browser.draw()
+
+    def scrollup_focus_element(self):
+        scrollup_element(self.focus)
+        self.render()
+        self.browser.raster_tab()
+        self.browser.draw()
     
     def scrolldown(self):
+        if self.focus and self.focus.style.get("overflow", "") == "scroll":
+            return self.scrolldown_focus_element()
         max_y = max(0, self.document.height - (self.browser.height - CHROME_PX))
         absolute_scroll = self.interest_region[0] + self.scroll
         new_absolute_scroll = min(absolute_scroll + SCROLL_STEP, max_y)
@@ -149,8 +164,10 @@ class Tab:
             print("re-rastering (scoll-down)")
             self.browser.raster_tab()
             self.browser.draw()
-    
+
     def scrollup(self):
+        if self.focus and self.focus.style.get("overflow", "") == "scroll":
+            return self.scrollup_focus_element()
         absolute_scroll = self.interest_region[0] + self.scroll
         new_absolute_scroll = max(0, absolute_scroll - SCROLL_STEP)
         new_scroll = new_absolute_scroll - self.interest_region[0]
@@ -173,6 +190,7 @@ class Tab:
                 rrect = skia.RRect.MakeRectXY(rect, radius, radius)
                 click_location = skia.Rect.MakeLTRB(x, y, x + 1, y + 1)
                 return rrect.contains(click_location)
+        set_scroll_focus = False
         y += self.scroll
         objs = [obj for obj in tree_to_list(self.document, []) if hittest(obj, x, y)]
         if not objs: return
@@ -204,6 +222,9 @@ class Tab:
                             if elt_form.tag == "form" and "action" in elt_form.attributes:
                                 return self.submit_form(elt_form)
                             elt_form = elt_form.parent
+                    elif elt.style.get("overflow", "") == "scroll" and not set_scroll_focus:
+                        self.focus = elt
+                        set_scroll_focus = True
                 if stop_propagation:
                     return
             elt = elt.parent
