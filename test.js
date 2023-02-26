@@ -37,6 +37,8 @@ outer.addEventListener("click", function(e) {
 })
 
 fragmentlink.addEventListener("click", function(e) {
+  console.log("start counter")
+  // for (var i = 0; i < 5e7; i++);
   console.log("scrolling")
 })
 
@@ -51,3 +53,13 @@ context.fillText("Hello world", 65, 65)
 orangebox.addEventListener("click", function() {
   console.log("clicked")
 })
+
+// setTimeout(function() {
+//   console.log("timer ran")
+// }, 2000)
+// setTimeout(function() {
+//   console.log("timer ran")
+// }, 4000)
+// setTimeout(function() {
+//   console.log("timer ran")
+// }, 6000)

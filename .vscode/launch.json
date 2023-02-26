@@ -19,7 +19,7 @@
       "program": "browser.py",
       "console": "integratedTerminal",
       "justMyCode": true,
-      "args": ["http://localhost:8000/"]
+      "args": ["http://localhost:8000/count"]
     },
     {
       "name": "Python: Server",

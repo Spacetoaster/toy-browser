@@ -6,8 +6,12 @@ from style import CSSParser
 from helpers import tree_to_list, node_tree_to_html, resolve_url, url_origin, parse_cookie_string, is_cookie_expired
 from request import request, COOKIE_JAR
 import dukpy
+import threading
+from taskrunner import Task
 
 EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
+SETTIMEOUT_CODE = "__runSetTimeout(dukpy.handle)"
+XHR_ONLOAD_CODE = "__runXHROnload(dukpy.out, dukpy.handle)"
 
 class JSContext:
     def __init__(self, tab):
@@ -31,6 +35,8 @@ class JSContext:
         self.interp.export_function("XMLHttpRequest_send", self.XMLHttpRequest_send)
         self.interp.export_function("get_cookie", self.get_cookie)
         self.interp.export_function("set_cookie", self.set_cookie)
+        self.interp.export_function("setTimeout", self.setTimeout)
+        self.interp.export_function("requestAnimationFrame", self.requestAnimationFrame)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
         self.node_to_handle = {}
@@ -52,7 +58,7 @@ class JSContext:
     def add_global_vars_for_tree(self, node):
         nodes_with_id = [node for node in tree_to_list(node, [])
                           if isinstance(node, Element) and node.attributes.get("id", "") != ""]
-        if "id" in node.attributes:
+        if isinstance(node, Element) and "id" in node.attributes:
             nodes_with_id.append(node)
         for node in nodes_with_id:
             id = node.attributes.get("id")
@@ -92,7 +98,7 @@ class JSContext:
         for child in elt.children:
             child.parent = elt
             self.add_global_vars_for_tree(child)
-        self.tab.render()
+        self.tab.set_needs_render()
     
     def innerHTML_get(self, handle):
         elt = self.handle_to_node[handle]
@@ -121,7 +127,7 @@ class JSContext:
         node.children.append(child)
         child.parent = node
         self.add_global_vars_for_tree(node)
-        self.tab.render()
+        self.tab.set_needs_render()
 
     def insert_before(self, handle, new_node_handle, child_handle):
         assert handle in self.handle_to_node, "can't find matching parent for handle"
@@ -146,7 +152,7 @@ class JSContext:
             node.children.append(new_node)
         new_node.parent = node
         self.add_global_vars_for_tree(new_node)
-        self.tab.render()
+        self.tab.set_needs_render()
 
     def remove_child(self, handle, child_handle):
         assert handle in self.handle_to_node, "can't find matching node for handle"
@@ -156,7 +162,7 @@ class JSContext:
         assert child in parent.children, "child node is not a child of parent"
         parent.children.remove(child)
         child.parent = None
-        self.tab.render()
+        self.tab.set_needs_render()
         self.clear_global_vars_for_tree(child)
         return child_handle
     
@@ -167,7 +173,7 @@ class JSContext:
         add_draw_cmd(canvas_element, DrawRect(x, y, x + w, y + h, fillStyle))
         # only call render if document is already fully loaded
         if self.tab.document:
-            self.tab.render()
+            self.tab.set_needs_render()
     
     def fill_text(self, handle, text, x, y, fillStyle):
         canvas_element = self.handle_to_node[handle]
@@ -177,7 +183,7 @@ class JSContext:
         add_draw_cmd(canvas_element, DrawText(x, y, text, font, fillStyle))
         # only call render if document is already fully loaded
         if self.tab.document:
-            self.tab.render()
+            self.tab.set_needs_render()
     
     def get_style(self, handle):
         elt = self.handle_to_node[handle]
@@ -199,22 +205,37 @@ class JSContext:
         elt.attributes["style"] = cssText
         # only call render if document is already fully loaded
         if self.tab.document:
-            self.tab.render()
+            self.tab.set_needs_render()
     
-    def XMLHttpRequest_send(self, method, url, body):
+    def XMLHttpRequest_send(self, method, url, body, isasync, handle):
         full_url = resolve_url(url, self.tab.url)
         if not self.tab.allowed_request(full_url):
             raise Exception("Cross-origin XHR blocked by CSP")
-        headers, out, _ = request(full_url, self.tab.url, payload=body, referrer_policy=self.tab.referrer_policy)
+        # think about how the cross origin exercise can be implemented again later
+        # headers, out, _ = request(full_url, self.tab.url, payload=body, referrer_policy=self.tab.referrer_policy)
+        # if url_origin(full_url) != url_origin(self.tab.url):
+        #     if method in ["GET", "POST", "HEAD"] and "access-control-allow-origin" in headers:
+        #         allowed_origins = headers["access-control-allow-origin"].split()
+        #         origin = url_origin(full_url)
+        #         if "*" in allowed_origins or origin in allowed_origins:
+        #             return out
+        #     raise Exception("Cross-origin XHR request not allowed, No \
+        #         'Access-Control-Allow-Origin' headers is present on the requested resource")
         if url_origin(full_url) != url_origin(self.tab.url):
-            if method in ["GET", "POST", "HEAD"] and "access-control-allow-origin" in headers:
-                allowed_origins = headers["access-control-allow-origin"].split()
-                origin = url_origin(full_url)
-                if "*" in allowed_origins or origin in allowed_origins:
-                    return out
-            raise Exception("Cross-origin XHR request not allowed, No \
-                'Access-Control-Allow-Origin' headers is present on the requested resource")
-        return out
+            raise Exception("Cross-origin XHR request not allowed")
+        def run_load():
+            headers, response, _ = request(full_url, self.tab.url, payload=body) # referrer policy?
+            task = Task(self.dispatch_xhr_onload, response, handle)
+            self.tab.task_runner.schedule_task(task)
+            if not isasync:
+                return response
+        if not isasync:
+            return run_load()
+        else:
+            threading.Thread(target=run_load).start()
+    
+    def dispatch_xhr_onload(self, out, handle):
+        do_default = self.interp.evaljs(XHR_ONLOAD_CODE, out=out, handle=handle)
 
     def get_cookie(self):
         _, _, host, _ = self.tab.url.split("/", 3)
@@ -240,5 +261,15 @@ class JSContext:
             if "HttpOnly" in params:
                 return
         COOKIE_JAR[host] = parse_cookie_string(new_cookie)
-            
-        
+    
+    def dispatch_settimeout(self, handle):
+        self.interp.evaljs(SETTIMEOUT_CODE, handle=handle)
+
+    def setTimeout(self, handle, time):
+        def run_callback():
+            task = Task(self.dispatch_settimeout, handle)
+            self.tab.task_runner.schedule_task(task)
+        threading.Timer(time / 1000.0, run_callback).start()
+    
+    def requestAnimationFrame(self):
+        self.tab.browser.set_needs_animation_frame(self.tab)
