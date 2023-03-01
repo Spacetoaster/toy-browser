@@ -362,8 +362,8 @@ class Tab:
         max_y = self.document.height - (self.browser.height - CHROME_PX)
         self.scroll = min(element.y, max_y)
         self.compute_interest_region()
-        print("scroll to fragment -> set needs raster")
-        self.browser.set_needs_raster_and_draw()
+        self.scroll_changed_in_tab = True
+        self.set_needs_render()
     
     def blur(self):
         self.focus = None
