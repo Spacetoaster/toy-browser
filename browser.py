@@ -154,7 +154,9 @@ class Tab:
     
     def render(self):
         if not self.needs_render:
+            # print("[tab] render (skipping)", self.url)
             return
+        print("[tab] render ", self.url)
         self.measure_render.start()
         self.needs_render = False
         style(self.nodes, sorted(self.rules, key=cascade_priority))
@@ -163,10 +165,14 @@ class Tab:
         self.display_list = []
         self.document.paint(self.display_list)
         self.measure_render.stop()
+        if self.interest_region == [0, 0]:
+            self.compute_interest_region(self.scroll)
     
     def run_animation_frame(self, scroll):
+        print("[tab] run_animation_frame")
         if not self.scroll_changed_in_tab:
             self.scroll = scroll
+        # print("run_animation_frame scroll:", scroll, " self.scroll:", self.scroll)
         self.js.interp.evaljs("__runRAFHandlers()")
         self.render()
         document_height = self.document.height
@@ -185,6 +191,7 @@ class Tab:
             display_list=self.display_list,
             interest_region=self.interest_region,
         )
+        # print("run_animation_frame - commiting interest_region", self.interest_region)
         self.display_list = None
         self.browser.commit(self, commit_data)
         self.scroll_changed_in_tab = False
@@ -215,45 +222,6 @@ class Tab:
         # return askyesno(title="Confirm form resubmission", message="Re-submitting post data, do you want to continue?")
         return True
 
-    def scrolldown_focus_element(self):
-        scrolldown_element(self.focus)
-        self.set_needs_render()
-
-    def scrollup_focus_element(self):
-        scrollup_element(self.focus)
-        self.set_needs_render()
-    
-    def scrolldown(self):
-        if self.focus and self.focus.style.get("overflow", "") == "scroll":
-            return self.scrolldown_focus_element()
-        max_y = max(0, self.document.height - (self.browser.height - CHROME_PX))
-        absolute_scroll = self.interest_region[0] + self.scroll
-        new_absolute_scroll = min(absolute_scroll + SCROLL_STEP, max_y)
-        new_scroll = new_absolute_scroll - self.interest_region[0]
-        self.scroll = new_scroll
-        if new_absolute_scroll + (self.browser.height - CHROME_PX) > self.interest_region[1]:
-            print("re-rastering (scoll-down)")
-            print("warning: check if i still need this code")
-            # self.browser.raster_tab()
-            # self.browser.draw()
-        self.compute_interest_region()
-        self.set_needs_render()
-
-    def scrollup(self):
-        if self.focus and self.focus.style.get("overflow", "") == "scroll":
-            return self.scrollup_focus_element()
-        absolute_scroll = self.interest_region[0] + self.scroll
-        new_absolute_scroll = max(0, absolute_scroll - SCROLL_STEP)
-        new_scroll = new_absolute_scroll - self.interest_region[0]
-        self.scroll = new_scroll
-        if self.scroll < 0:
-            print("re-rastering (scroll-up)")
-            print("warning: check if i still need this code")
-            # self.browser.raster_tab()
-            # self.browser.draw()
-        self.compute_interest_region()
-        self.set_needs_render()
-
     def click(self, x, y, load = True):
         self.render() # needed?
         def hittest(obj, x, y):
@@ -269,6 +237,7 @@ class Tab:
                 click_location = skia.Rect.MakeLTRB(x, y, x + 1, y + 1)
                 return rrect.contains(click_location)
         set_scroll_focus = False
+        # print("[tab] click self.scroll: ", self.scroll)
         y += self.scroll
         objs = [obj for obj in tree_to_list(self.document, []) if hittest(obj, x, y)]
         if not objs: return
@@ -310,7 +279,7 @@ class Tab:
     def submit_form_by_enter(self):
         if not self.focus:
             return
-        elt = self.focus
+        elt = self.focus 
         while elt:
             if elt.tag == "form" and "action" in elt.attributes:
                 return self.submit_form(elt)
@@ -350,7 +319,7 @@ class Tab:
                 self.set_needs_render()
 
     def scroll_to_fragment(self, url):
-        print("scroll to fragment")
+        # print("scroll to fragment")
         fragment = url.split("#")[1] if "#" in url else None
         if not fragment:
             return
@@ -361,7 +330,7 @@ class Tab:
         element = elements_with_id[-1]
         max_y = self.document.height - (self.browser.height - CHROME_PX)
         self.scroll = min(element.y, max_y)
-        self.compute_interest_region()
+        self.compute_interest_region(self.scroll)
         self.scroll_changed_in_tab = True
         self.set_needs_render()
     
@@ -376,10 +345,10 @@ class Tab:
             self.focus.attributes["value"] = ""
             self.set_needs_render()
     
-    def compute_interest_region(self):
+    def compute_interest_region(self, scroll):
         # interest region is in dots, not pixels
         new_scroll = 0
-        absolute_scroll = self.interest_region[0] + self.scroll
+        absolute_scroll = self.interest_region[0] + scroll
         new_region_start = absolute_scroll - INTEREST_REGION_SIZE / 2
         extra_space_top, extra_space_bottom = 0, 0
         if new_region_start < 0:
@@ -391,8 +360,10 @@ class Tab:
         new_region_end = min(self.document.height, new_region_end + extra_space_top)
         self.interest_region = [new_region_start, new_region_end]
         new_scroll = absolute_scroll - self.interest_region[0]
-        # print("interest region ", self.interest_region)
+        # print("computed interest region: ", self.interest_region, " new_scroll: ", new_scroll)
         self.scroll = new_scroll
+        self.scroll_changed_in_tab = True
+        self.browser.set_needs_animation_frame(self)
     
     def draw_input_focus(self, canvas):
         focus_objects = [obj for obj in tree_to_list(self.document, []) if obj.node == self.focus
@@ -421,11 +392,17 @@ class Tab:
     
     def handle_quit(self):
         print(self.measure_render.text())
+    
+    def set_scroll(self, scroll):
+        self.scroll = scroll
+        self.scroll_changed_in_tab = True
 
 def raster(canvas, display_list, interest_region, scale):
     # if not self.document: return
     canvas.save()
     canvas.clipRect(skia.Rect.MakeLTRB(0, 0, WIDTH * scale, INTEREST_REGION_SIZE * browser.scale))
+    # print("raster - translation: ", -interest_region[0] * scale)
+    # print("interest region", interest_region)
     canvas.translate(0, -interest_region[0] * scale)
     for cmd in display_list:
         cmd.execute(canvas)
@@ -496,9 +473,14 @@ class Browser:
         self.active_tab_interest_region = None
     
     def set_active_tab(self, index):
+        if self.active_tab != None:
+            active_tab = self.tabs[self.active_tab]
+            set_scroll_task = Task(active_tab.set_scroll, self.scroll)
+            active_tab.task_runner.schedule_task(set_scroll_task)
         self.active_tab = index
         self.scroll = 0
         self.url = None
+        self.active_tab_display_list = []
         self.needs_animation_frame = True
     
     def commit(self, tab, data):
@@ -512,12 +494,13 @@ class Browser:
                 self.active_tab_display_list = data.display_list
             self.animation_timer = None
             self.active_tab_interest_region = data.interest_region
-            print("commit -> raster and draw")
+            # print("commit -> raster and draw")
             self.set_needs_raster_and_draw()
         self.lock.release()
 
     def set_needs_raster_and_draw(self):
         self.needs_raster_and_draw = True
+        self.needs_animation_frame = True
     
     def set_needs_animation_frame(self, tab):
         self.lock.acquire(blocking=True)
@@ -528,8 +511,8 @@ class Browser:
     def handle_tab(self, e):
         self.lock.acquire(blocking=True)
         active_tab = self.tabs[self.active_tab]
-        Task = (active_tab.switch_to_next_input)
-        active_tab.task_runner.schedule_task(Task)
+        task = Task(active_tab.switch_to_next_input)
+        active_tab.task_runner.schedule_task(task)
         self.lock.release()
     
     def raster_tab(self):
@@ -547,7 +530,7 @@ class Browser:
         # self.tabs[self.active_tab].draw(canvas)
     
     def raster_chrome(self):
-        print("raster chrome")
+        # print("raster chrome")
         canvas = self.chrome_surface.getCanvas()
         canvas.clear(skia.ColorWHITE)
         # draw tabs
@@ -602,6 +585,7 @@ class Browser:
         # draw tab
         tab_rect = skia.Rect.MakeLTRB(0, self.scale * CHROME_PX, self.scale * WIDTH, self.scale * HEIGHT)
         tab_offset = self.scale * (CHROME_PX - self.scroll)
+        # print("drawing offset with scroll: ", self.scroll)
         canvas.save()
         canvas.clipRect(tab_rect)
         canvas.translate(0, tab_offset)
@@ -633,16 +617,37 @@ class Browser:
         sdl2.SDL_RenderCopy(self.renderer, texture, None, None)
         sdl2.SDL_RenderPresent(self.renderer)
         # sdl2.SDL_UpdateWindowSurface(self.sdl_window)
+    
+    def scrolldown(self):
+        max_y = max(0, self.active_tab_height - (self.height - CHROME_PX))
+        
+        absolute_scroll = self.active_tab_interest_region[0] + self.scroll
+        new_absolute_scroll = min(absolute_scroll + SCROLL_STEP, max_y)
+
+        new_scroll = new_absolute_scroll - self.active_tab_interest_region[0]
+        # compute new region if we moved close towards end of current region
+        if new_scroll != self.scroll and new_absolute_scroll + (self.height - CHROME_PX) + SCROLL_STEP >= self.active_tab_interest_region[1]:
+            active_tab = self.tabs[self.active_tab]
+            active_tab.task_runner.schedule_task(Task(active_tab.compute_interest_region, new_scroll))
+        return new_scroll
+
+    def scrollup(self):
+        absolute_scroll = self.active_tab_interest_region[0] + self.scroll
+        new_absolute_scroll = max(0, absolute_scroll - SCROLL_STEP)
+
+        new_scroll = new_absolute_scroll - self.active_tab_interest_region[0]
+        # compute new region if we moved closed towards start of current region
+        if new_scroll != self.scroll and new_scroll <= SCROLL_STEP:
+            active_tab = self.tabs[self.active_tab]
+            active_tab.task_runner.schedule_task(Task(active_tab.compute_interest_region, new_scroll))
+        return new_scroll
 
     def handle_down(self):
         self.lock.acquire(blocking=True)
         if not self.active_tab_height:
             self.lock.release()
             return
-        scroll = clamp_scroll(
-            self.scroll + SCROLL_STEP,
-            self.active_tab_height
-        )
+        scroll = self.scrolldown()
         self.scroll = scroll
         self.set_needs_raster_and_draw()
         self.lock.release()
@@ -652,10 +657,7 @@ class Browser:
         if not self.active_tab_height:
             self.lock.release()
             return
-        scroll = clamp_scroll(
-            self.scroll - SCROLL_STEP,
-            self.active_tab_height
-        )
+        scroll = self.scrollup()
         self.scroll = scroll
         self.set_needs_raster_and_draw()
         self.lock.release()
@@ -674,20 +676,6 @@ class Browser:
             self.set_needs_raster_and_draw()
         self.lock.release()
     
-    # def handle_mousewheel(self, e):
-    #     # only works on mac due to how tk handles mouse wheel events
-    #     if e.delta == 1:
-    #         self.handle_up(e)
-    #     elif e.delta == -1:
-    #         self.handle_down()
-    
-    # def handle_resize(self, e):
-    #     if e.width > 1 and e.height > 1:
-    #         self.width = e.width
-    #         self.height = e.height
-    #     self.tabs[self.active_tab].resize(self.width)
-    #     self.set_needs_raster_and_draw()
-    
     def handle_click(self, e):
         self.lock.acquire(blocking=True)
         if e.y < CHROME_PX:
@@ -697,6 +685,9 @@ class Browser:
             active_tab.task_runner.schedule_task(task)
             if 40 <= e.x < 40 + 80 * len(self.tabs) and 0 <= e.y < 40:
                 self.set_active_tab(int((e.x - 40) / 80))
+                active_tab = self.tabs[self.active_tab]
+                task = Task(active_tab.set_needs_render)
+                active_tab.task_runner.schedule_task(task)
             elif 10 <= e.x < 30 and 10 <= e.y < 30:
                 self.load_internal("https://browser.engineering/")
             elif 10 <= e.x < 35 and 50 <= e.y < 90:
@@ -714,6 +705,7 @@ class Browser:
         else:
             self.focus = "content"
             active_tab = self.tabs[self.active_tab]
+            # print("[browser] handle_click self.scroll: ", self.scroll)
             task = Task(active_tab.click, e.x, e.y - CHROME_PX)
             active_tab.task_runner.schedule_task(task)
         self.lock.release()
@@ -791,6 +783,7 @@ class Browser:
         if not self.needs_raster_and_draw:
             self.lock.release()
             return
+        print("[browser] raster_and_draw")
         self.measure_raster_and_draw.start()
         self.raster_chrome()
         self.raster_tab()
