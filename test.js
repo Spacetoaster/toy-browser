@@ -50,8 +50,18 @@ context.fillStyle = "black";
 context.fillText("Hello world", 60, 60)
 context.fillText("Hello world", 65, 65)
 
+var i = 0
+var timerId
+
 orangebox.addEventListener("click", function() {
   console.log("clicked")
+  timerId = setInterval(function() {
+    console.log("timer ran")
+    if (i == 2) {
+      clearInterval(timerId)
+    }
+    i++;
+  }, 2000)
 })
 
 // setTimeout(function() {

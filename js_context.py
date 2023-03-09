@@ -11,6 +11,7 @@ from taskrunner import Task
 
 EVENT_DISPATCH_CODE = "new Node(dukpy.handle).dispatchEvent(new Event(dukpy.type))"
 SETTIMEOUT_CODE = "__runSetTimeout(dukpy.handle)"
+SETINTERVAL_CODE = "__runSetInterval(dukpy.handle)"
 XHR_ONLOAD_CODE = "__runXHROnload(dukpy.out, dukpy.handle)"
 
 class JSContext:
@@ -36,6 +37,7 @@ class JSContext:
         self.interp.export_function("get_cookie", self.get_cookie)
         self.interp.export_function("set_cookie", self.set_cookie)
         self.interp.export_function("setTimeout", self.setTimeout)
+        self.interp.export_function("setInterval", self.setInterval)
         self.interp.export_function("requestAnimationFrame", self.requestAnimationFrame)
         with open("runtime.js") as f:
             self.interp.evaljs(f.read())
@@ -268,6 +270,16 @@ class JSContext:
     def setTimeout(self, handle, time):
         def run_callback():
             task = Task(self.dispatch_settimeout, handle)
+            self.tab.task_runner.schedule_task(task)
+        threading.Timer(time / 1000.0, run_callback).start()
+    
+    def dispatch_setinterval(self, handle, time):
+        self.interp.evaljs(SETINTERVAL_CODE, handle=handle)
+        self.setInterval(handle, time)
+    
+    def setInterval(self, handle, time):
+        def run_callback():
+            task = Task(self.dispatch_setinterval, handle, time)
             self.tab.task_runner.schedule_task(task)
         threading.Timer(time / 1000.0, run_callback).start()
     

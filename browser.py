@@ -169,7 +169,7 @@ class Tab:
             self.compute_interest_region(self.scroll)
     
     def run_animation_frame(self, scroll):
-        print("[tab] run_animation_frame")
+        # print("[tab] run_animation_frame")
         if not self.scroll_changed_in_tab:
             self.scroll = scroll
         # print("run_animation_frame scroll:", scroll, " self.scroll:", self.scroll)
@@ -783,7 +783,7 @@ class Browser:
         if not self.needs_raster_and_draw:
             self.lock.release()
             return
-        print("[browser] raster_and_draw")
+        # print("[browser] raster_and_draw")
         self.measure_raster_and_draw.start()
         self.raster_chrome()
         self.raster_tab()

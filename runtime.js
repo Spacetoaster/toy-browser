@@ -157,6 +157,27 @@ function __runSetTimeout(handle) {
   callback();
 }
 
+SET_INTERVAL_REQUESTS = {}
+
+function setInterval(callback, time_delta) {
+  var handle = Object.keys(SET_INTERVAL_REQUESTS).length;
+  SET_INTERVAL_REQUESTS[handle] = callback;
+  call_python("setInterval", handle, time_delta);
+  return handle;
+}
+
+function clearInterval(handle) {
+  // easy solution: don't clean up the timers
+  delete SET_INTERVAL_REQUESTS[handle];
+}
+
+function __runSetInterval(handle) {
+  var callback = SET_INTERVAL_REQUESTS[handle]
+  if (callback) {
+    callback();
+  }
+}
+
 XHR_REQUESTS = {}
 
 function XMLHttpRequest() {
